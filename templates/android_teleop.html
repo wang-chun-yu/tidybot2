@@ -1,0 +1,549 @@
+<!-- Android兼容的TidyBot2遥控界面 -->
+<!-- 使用设备方向传感器替代WebXR，支持更多设备 -->
+
+<!doctype html>
+<html>
+<head>
+    <meta charset='utf-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1, user-scalable=no'>
+    <title>TidyBot2 Android 遥控</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 10px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            touch-action: none;
+            overflow: hidden;
+        }
+
+        .container {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .header {
+            text-align: center;
+            padding: 10px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
+            margin-bottom: 10px;
+        }
+
+        .status {
+            font-size: 14px;
+            margin: 5px 0;
+        }
+
+        .controls {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .mode-selector {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .mode-btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .mode-btn.active {
+            background: #4CAF50;
+            color: white;
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.4);
+        }
+
+        .mode-btn.inactive {
+            background: rgba(255,255,255,0.2);
+            color: white;
+        }
+
+        .control-area {
+            flex: 1;
+            display: flex;
+            gap: 15px;
+            padding: 20px;
+        }
+
+        .joystick-container {
+            flex: 1;
+            position: relative;
+            background: rgba(0,0,0,0.2);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .joystick {
+            width: 120px;
+            height: 120px;
+            background: rgba(255,255,255,0.1);
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .joystick-knob {
+            width: 40px;
+            height: 40px;
+            background: white;
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            transition: all 0.1s;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+
+        .buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            min-width: 120px;
+        }
+
+        .control-btn {
+            padding: 15px;
+            border: none;
+            border-radius: 15px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: rgba(255,255,255,0.2);
+            color: white;
+        }
+
+        .control-btn:active {
+            background: #FF5722;
+            transform: scale(0.95);
+        }
+
+        .gripper-control {
+            margin-top: 20px;
+        }
+
+        .gripper-slider {
+            width: 100%;
+            height: 40px;
+            -webkit-appearance: none;
+            background: rgba(255,255,255,0.2);
+            border-radius: 20px;
+            outline: none;
+        }
+
+        .gripper-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 30px;
+            height: 30px;
+            background: white;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        .sensor-info {
+            background: rgba(0,0,0,0.3);
+            padding: 10px;
+            border-radius: 10px;
+            font-size: 12px;
+            text-align: center;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        @media (orientation: landscape) {
+            .control-area {
+                flex-direction: row;
+            }
+        }
+
+        @media (orientation: portrait) {
+            .control-area {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>🤖 TidyBot2 遥控</h2>
+            <div class="status" id="connection-status">连接中...</div>
+            <div class="status" id="rtt-info">延迟: -- ms</div>
+        </div>
+
+        <div class="controls">
+            <!-- 模式选择 -->
+            <div class="mode-selector">
+                <button class="mode-btn active" id="base-mode-btn" onclick="switchMode('base')">
+                    🚗 底盘控制
+                </button>
+                <button class="mode-btn inactive" id="arm-mode-btn" onclick="switchMode('arm')">
+                    🦾 机械臂控制
+                </button>
+            </div>
+
+            <!-- 控制区域 -->
+            <div class="control-area">
+                <!-- 虚拟摇杆 -->
+                <div class="joystick-container">
+                    <div class="joystick" id="joystick">
+                        <div class="joystick-knob" id="joystick-knob"></div>
+                    </div>
+                    <div style="position: absolute; bottom: 10px; font-size: 12px; text-align: center; width: 100%;">
+                        <span id="joystick-label">移动控制</span>
+                    </div>
+                </div>
+
+                <!-- 控制按钮 -->
+                <div class="buttons">
+                    <button class="control-btn" id="start-btn" onclick="toggleEpisode()">
+                        开始操作
+                    </button>
+                    <button class="control-btn" onclick="resetEnv()">
+                        重置环境
+                    </button>
+                    
+                    <!-- 夹爪控制（仅机械臂模式显示） -->
+                    <div class="gripper-control hidden" id="gripper-control">
+                        <label>夹爪控制</label>
+                        <input type="range" class="gripper-slider" id="gripper-slider" 
+                               min="0" max="100" value="0" onchange="updateGripper()">
+                        <div style="font-size: 12px; text-align: center; margin-top: 5px;">
+                            <span id="gripper-value">0%</span>
+                        </div>
+                    </div>
+
+                    <!-- 方向传感器信息 -->
+                    <div class="sensor-info" id="sensor-info">
+                        <div>传感器状态: <span id="sensor-status">未启用</span></div>
+                        <div>倾斜: <span id="tilt-info">--</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script>
+        // 全局状态
+        let currentMode = 'base';
+        let episodeActive = false;
+        let deviceId = Math.random().toString(36).substring(2, 15);
+        let socket = null;
+        let lastSensorData = { alpha: 0, beta: 0, gamma: 0 };
+        let sensorSupported = false;
+        
+        // 虚拟摇杆状态
+        let joystickActive = false;
+        let joystickCenter = { x: 0, y: 0 };
+        let joystickValue = { x: 0, y: 0 };
+        
+        // RTT统计
+        class RTTStats {
+            constructor(bufferSize) {
+                this.bufferSize = bufferSize;
+                this.bufferIndex = 0;
+                this.rttArray = new Array(bufferSize).fill(0);
+            }
+
+            calculate(rtt) {
+                this.rttArray[this.bufferIndex] = rtt;
+                this.bufferIndex = (this.bufferIndex + 1) % this.bufferSize;
+                const avgRtt = this.rttArray.reduce((acc, cur) => acc + cur, 0) / this.bufferSize;
+                return avgRtt.toFixed(1);
+            }
+        }
+        const rttStats = new RTTStats(20);
+
+        // 初始化
+        function init() {
+            setupSocket();
+            setupJoystick();
+            setupSensors();
+            updateUI();
+        }
+
+        // Socket连接
+        function setupSocket() {
+            socket = io();
+            
+            socket.on('connect', () => {
+                document.getElementById('connection-status').textContent = '已连接';
+            });
+            
+            socket.on('disconnect', () => {
+                document.getElementById('connection-status').textContent = '连接断开';
+            });
+            
+            socket.on('echo', (timestamp) => {
+                const rtt = Date.now() - timestamp;
+                const avgRtt = rttStats.calculate(rtt);
+                document.getElementById('rtt-info').textContent = `延迟: ${avgRtt} ms`;
+            });
+        }
+
+        // 设置虚拟摇杆
+        function setupJoystick() {
+            const joystick = document.getElementById('joystick');
+            const knob = document.getElementById('joystick-knob');
+            
+            // 获取摇杆中心位置
+            function updateJoystickCenter() {
+                const rect = joystick.getBoundingClientRect();
+                joystickCenter.x = rect.left + rect.width / 2;
+                joystickCenter.y = rect.top + rect.height / 2;
+            }
+            
+            // 触摸开始
+            joystick.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                joystickActive = true;
+                updateJoystickCenter();
+                updateJoystickPosition(e.touches[0]);
+            });
+            
+            // 触摸移动
+            joystick.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                if (joystickActive) {
+                    updateJoystickPosition(e.touches[0]);
+                }
+            });
+            
+            // 触摸结束
+            joystick.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                joystickActive = false;
+                joystickValue = { x: 0, y: 0 };
+                knob.style.transform = 'translate(-50%, -50%)';
+            });
+            
+            // 鼠标事件（桌面测试）
+            joystick.addEventListener('mousedown', (e) => {
+                joystickActive = true;
+                updateJoystickCenter();
+                updateJoystickPosition(e);
+            });
+            
+            document.addEventListener('mousemove', (e) => {
+                if (joystickActive) {
+                    updateJoystickPosition(e);
+                }
+            });
+            
+            document.addEventListener('mouseup', () => {
+                joystickActive = false;
+                joystickValue = { x: 0, y: 0 };
+                knob.style.transform = 'translate(-50%, -50%)';
+            });
+        }
+        
+        // 更新摇杆位置
+        function updateJoystickPosition(pointer) {
+            const deltaX = pointer.clientX - joystickCenter.x;
+            const deltaY = pointer.clientY - joystickCenter.y;
+            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+            const maxDistance = 40; // 最大移动距离
+            
+            let x = deltaX;
+            let y = deltaY;
+            
+            if (distance > maxDistance) {
+                x = (deltaX / distance) * maxDistance;
+                y = (deltaY / distance) * maxDistance;
+            }
+            
+            // 更新摇杆显示
+            const knob = document.getElementById('joystick-knob');
+            knob.style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`;
+            
+            // 计算归一化值
+            joystickValue.x = x / maxDistance;
+            joystickValue.y = -y / maxDistance; // Y轴反向
+        }
+
+        // 设置传感器
+        function setupSensors() {
+            if (window.DeviceOrientationEvent) {
+                // 请求权限（iOS 13+需要）
+                if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    DeviceOrientationEvent.requestPermission()
+                        .then(response => {
+                            if (response == 'granted') {
+                                enableSensors();
+                            } else {
+                                document.getElementById('sensor-status').textContent = '权限被拒绝';
+                            }
+                        });
+                } else {
+                    enableSensors();
+                }
+            } else {
+                document.getElementById('sensor-status').textContent = '不支持';
+            }
+        }
+
+        function enableSensors() {
+            sensorSupported = true;
+            document.getElementById('sensor-status').textContent = '已启用';
+            
+            window.addEventListener('deviceorientation', (event) => {
+                lastSensorData = {
+                    alpha: event.alpha || 0,  // Z轴旋转
+                    beta: event.beta || 0,    // X轴旋转
+                    gamma: event.gamma || 0   // Y轴旋转
+                };
+                
+                document.getElementById('tilt-info').textContent = 
+                    `α:${lastSensorData.alpha.toFixed(1)}° β:${lastSensorData.beta.toFixed(1)}° γ:${lastSensorData.gamma.toFixed(1)}°`;
+            });
+        }
+
+        // 切换控制模式
+        function switchMode(mode) {
+            currentMode = mode;
+            
+            // 更新按钮状态
+            document.getElementById('base-mode-btn').className = 
+                mode === 'base' ? 'mode-btn active' : 'mode-btn inactive';
+            document.getElementById('arm-mode-btn').className = 
+                mode === 'arm' ? 'mode-btn active' : 'mode-btn inactive';
+            
+            // 更新UI
+            updateUI();
+        }
+
+        // 更新UI
+        function updateUI() {
+            const gripperControl = document.getElementById('gripper-control');
+            const joystickLabel = document.getElementById('joystick-label');
+            
+            if (currentMode === 'arm') {
+                gripperControl.classList.remove('hidden');
+                joystickLabel.textContent = '位置控制';
+            } else {
+                gripperControl.classList.add('hidden');
+                joystickLabel.textContent = '移动控制';
+            }
+        }
+
+        // 切换操作状态
+        function toggleEpisode() {
+            const btn = document.getElementById('start-btn');
+            if (!episodeActive) {
+                episodeActive = true;
+                btn.textContent = '结束操作';
+                btn.style.background = '#F44336';
+                sendCommand('episode_started');
+            } else {
+                episodeActive = false;
+                btn.textContent = '开始操作';
+                btn.style.background = 'rgba(255,255,255,0.2)';
+                sendCommand('episode_ended');
+            }
+        }
+
+        // 重置环境
+        function resetEnv() {
+            episodeActive = false;
+            document.getElementById('start-btn').textContent = '开始操作';
+            document.getElementById('start-btn').style.background = 'rgba(255,255,255,0.2)';
+            sendCommand('reset_env');
+        }
+
+        // 更新夹爪
+        function updateGripper() {
+            const slider = document.getElementById('gripper-slider');
+            const value = slider.value;
+            document.getElementById('gripper-value').textContent = `${value}%`;
+        }
+
+        // 发送命令
+        function sendCommand(command) {
+            if (socket) {
+                socket.emit('message', {
+                    timestamp: Date.now(),
+                    device_id: deviceId,
+                    state_update: command
+                });
+            }
+        }
+
+        // 发送控制数据
+        function sendControlData() {
+            if (!socket || !episodeActive) return;
+            
+            let controlData = {
+                timestamp: Date.now(),
+                device_id: deviceId,
+                teleop_mode: currentMode
+            };
+            
+            if (currentMode === 'base') {
+                // 底盘控制：摇杆控制移动，传感器控制旋转
+                controlData.position = {
+                    x: joystickValue.x * 0.1,  // 缩放到合适范围
+                    y: joystickValue.y * 0.1,
+                    z: 0
+                };
+                controlData.orientation = {
+                    x: 0,
+                    y: 0,
+                    z: sensorSupported ? lastSensorData.gamma * 0.01 : 0,
+                    w: 1
+                };
+            } else {
+                // 机械臂控制：摇杆控制XY，传感器控制Z
+                controlData.position = {
+                    x: joystickValue.x * 0.05,
+                    y: joystickValue.y * 0.05,
+                    z: sensorSupported ? lastSensorData.beta * 0.002 : 0
+                };
+                controlData.orientation = {
+                    x: 0,
+                    y: 0,
+                    z: 0,
+                    w: 1
+                };
+                
+                // 夹爪控制
+                const gripperSlider = document.getElementById('gripper-slider');
+                controlData.gripper_delta = (gripperSlider.value - 50) / 50; // -1到1
+            }
+            
+            socket.emit('message', controlData);
+        }
+
+        // 定期发送控制数据
+        setInterval(sendControlData, 50); // 20Hz
+
+        // 页面加载完成后初始化
+        window.addEventListener('load', init);
+
+        // 防止页面滚动
+        document.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+        }, { passive: false });
+    </script>
+</body>
+</html> 

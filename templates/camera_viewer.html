@@ -1,0 +1,645 @@
+<!-- TidyBot2 相机视图组件 -->
+<!-- 为Android遥控界面提供实时视频流显示 -->
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>TidyBot2 相机视图</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            font-family: Arial, sans-serif;
+            color: white;
+        }
+
+        .camera-container {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .camera-header {
+            background: rgba(0,0,0,0.8);
+            padding: 10px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+        }
+
+        .camera-title {
+            font-weight: bold;
+        }
+
+        .camera-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ff4444;
+        }
+
+        .status-indicator.active {
+            background: #44ff44;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .camera-grid {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 2px;
+            padding: 2px;
+        }
+
+        @media (orientation: landscape) {
+            .camera-grid {
+                grid-template-columns: 1fr 1fr;
+                grid-template-rows: 1fr;
+            }
+        }
+
+        .camera-view {
+            position: relative;
+            background: #222;
+            border-radius: 8px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .camera-label {
+            background: rgba(0,0,0,0.7);
+            padding: 8px 12px;
+            font-size: 12px;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .camera-frame {
+            flex: 1;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .camera-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 4px;
+        }
+
+        .camera-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #888;
+            font-size: 14px;
+            gap: 10px;
+        }
+
+        .camera-placeholder i {
+            font-size: 48px;
+            opacity: 0.5;
+        }
+
+        .camera-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255,255,255,0.8);
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+
+        .crosshair::before,
+        .crosshair::after {
+            content: '';
+            position: absolute;
+            background: rgba(255,255,255,0.8);
+            box-shadow: 0 0 5px rgba(0,0,0,0.5);
+        }
+
+        .crosshair::before {
+            top: 50%;
+            left: -10px;
+            right: -10px;
+            height: 1px;
+            transform: translateY(-50%);
+        }
+
+        .crosshair::after {
+            left: 50%;
+            top: -10px;
+            bottom: -10px;
+            width: 1px;
+            transform: translateX(-50%);
+        }
+
+        .camera-info {
+            position: absolute;
+            bottom: 5px;
+            left: 5px;
+            right: 5px;
+            background: rgba(0,0,0,0.7);
+            padding: 5px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .fps-counter {
+            color: #44ff44;
+        }
+
+        .resolution-info {
+            color: #888;
+        }
+
+        .controls {
+            background: rgba(0,0,0,0.8);
+            padding: 10px;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .control-btn {
+            padding: 8px 16px;
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 20px;
+            color: white;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .control-btn:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .control-btn.active {
+            background: #4CAF50;
+            border-color: #4CAF50;
+        }
+
+        .fullscreen-btn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 40px;
+            height: 40px;
+            background: rgba(0,0,0,0.7);
+            border: none;
+            border-radius: 50%;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+        }
+
+        .error-message {
+            color: #ff4444;
+            text-align: center;
+            padding: 20px;
+            font-size: 14px;
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            color: #888;
+        }
+
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #333;
+            border-top: 2px solid #888;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="camera-container">
+        <!-- 头部状态 -->
+        <div class="camera-header">
+            <div class="camera-title">
+                <i class="fas fa-video"></i>
+                TidyBot2 相机视图
+            </div>
+            <div class="camera-status">
+                <div class="status-indicator" id="stream-status"></div>
+                <span id="stream-text">连接中...</span>
+                <span id="stream-fps">0 FPS</span>
+            </div>
+        </div>
+
+        <!-- 相机网格 -->
+        <div class="camera-grid">
+            <!-- 底盘相机 -->
+            <div class="camera-view" id="base-camera">
+                <div class="camera-label">
+                    <i class="fas fa-car"></i>
+                    底盘相机 (Base Camera)
+                </div>
+                <div class="camera-frame">
+                    <div class="camera-placeholder" id="base-placeholder">
+                        <i class="fas fa-camera"></i>
+                        <div>等待视频流...</div>
+                        <div class="loading">
+                            <div class="spinner"></div>
+                            <span>加载中</span>
+                        </div>
+                    </div>
+                    <img class="camera-image" id="base-image" style="display: none;" alt="Base Camera">
+                    <div class="camera-overlay">
+                        <div class="crosshair"></div>
+                    </div>
+                    <div class="camera-info">
+                        <span class="fps-counter" id="base-fps">-- FPS</span>
+                        <span class="resolution-info" id="base-resolution">--x--</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 腕部相机 -->
+            <div class="camera-view" id="wrist-camera">
+                <div class="camera-label">
+                    <i class="fas fa-hand-paper"></i>
+                    腕部相机 (Wrist Camera)
+                </div>
+                <div class="camera-frame">
+                    <div class="camera-placeholder" id="wrist-placeholder">
+                        <i class="fas fa-camera"></i>
+                        <div>等待视频流...</div>
+                        <div class="loading">
+                            <div class="spinner"></div>
+                            <span>加载中</span>
+                        </div>
+                    </div>
+                    <img class="camera-image" id="wrist-image" style="display: none;" alt="Wrist Camera">
+                    <div class="camera-overlay">
+                        <div class="crosshair"></div>
+                    </div>
+                    <div class="camera-info">
+                        <span class="fps-counter" id="wrist-fps">-- FPS</span>
+                        <span class="resolution-info" id="wrist-resolution">--x--</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 控制按钮 -->
+        <div class="controls">
+            <button class="control-btn active" onclick="toggleStream('base')">
+                <i class="fas fa-car"></i> 底盘相机
+            </button>
+            <button class="control-btn active" onclick="toggleStream('wrist')">
+                <i class="fas fa-hand-paper"></i> 腕部相机
+            </button>
+            <button class="control-btn" onclick="toggleCrosshair()">
+                <i class="fas fa-crosshairs"></i> 十字线
+            </button>
+            <button class="control-btn" onclick="toggleFullscreen()">
+                <i class="fas fa-expand"></i> 全屏
+            </button>
+        </div>
+    </div>
+
+    <!-- 全屏按钮 -->
+    <button class="fullscreen-btn" onclick="toggleFullscreen()">
+        <i class="fas fa-expand"></i>
+    </button>
+
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script>
+        class CameraViewer {
+            constructor() {
+                this.socket = null;
+                this.streamEnabled = {
+                    base: true,
+                    wrist: true
+                };
+                this.crosshairVisible = true;
+                this.frameCount = { base: 0, wrist: 0 };
+                this.lastFpsTime = Date.now();
+                
+                this.init();
+            }
+
+            init() {
+                this.setupSocket();
+                this.setupFpsCounter();
+                this.setupErrorHandling();
+            }
+
+            setupSocket() {
+                // 连接到主服务器的socket
+                this.socket = io();
+                
+                this.socket.on('connect', () => {
+                    this.updateStreamStatus(true);
+                    console.log('Camera viewer connected');
+                });
+                
+                this.socket.on('disconnect', () => {
+                    this.updateStreamStatus(false);
+                    console.log('Camera viewer disconnected');
+                });
+
+                // 监听图像数据
+                this.socket.on('camera_frame', (data) => {
+                    this.updateCameraFrame(data);
+                });
+
+                // 监听相机状态
+                this.socket.on('camera_status', (status) => {
+                    this.updateCameraStatus(status);
+                });
+            }
+
+            updateStreamStatus(connected) {
+                const indicator = document.getElementById('stream-status');
+                const text = document.getElementById('stream-text');
+                
+                if (connected) {
+                    indicator.classList.add('active');
+                    text.textContent = '已连接';
+                } else {
+                    indicator.classList.remove('active');
+                    text.textContent = '连接断开';
+                    this.showPlaceholders();
+                }
+            }
+
+            updateCameraFrame(data) {
+                const { camera, frame, width, height } = data;
+                
+                if (!this.streamEnabled[camera]) return;
+                
+                const img = document.getElementById(`${camera}-image`);
+                const placeholder = document.getElementById(`${camera}-placeholder`);
+                const resolution = document.getElementById(`${camera}-resolution`);
+                
+                if (img && frame) {
+                    // 更新图像
+                    img.src = `data:image/jpeg;base64,${frame}`;
+                    img.style.display = 'block';
+                    placeholder.style.display = 'none';
+                    
+                    // 更新分辨率信息
+                    if (resolution) {
+                        resolution.textContent = `${width}x${height}`;
+                    }
+                    
+                    // 更新帧计数
+                    this.frameCount[camera]++;
+                }
+            }
+
+            updateCameraStatus(status) {
+                const { camera, error, fps } = status;
+                
+                if (error) {
+                    this.showError(camera, error);
+                } else if (fps !== undefined) {
+                    const fpsElement = document.getElementById(`${camera}-fps`);
+                    if (fpsElement) {
+                        fpsElement.textContent = `${fps.toFixed(1)} FPS`;
+                    }
+                }
+            }
+
+            showError(camera, error) {
+                const placeholder = document.getElementById(`${camera}-placeholder`);
+                if (placeholder) {
+                    placeholder.innerHTML = `
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <div class="error-message">${error}</div>
+                    `;
+                }
+            }
+
+            showPlaceholders() {
+                ['base', 'wrist'].forEach(camera => {
+                    const img = document.getElementById(`${camera}-image`);
+                    const placeholder = document.getElementById(`${camera}-placeholder`);
+                    
+                    if (img) img.style.display = 'none';
+                    if (placeholder) {
+                        placeholder.style.display = 'flex';
+                        placeholder.innerHTML = `
+                            <i class="fas fa-camera"></i>
+                            <div>等待视频流...</div>
+                            <div class="loading">
+                                <div class="spinner"></div>
+                                <span>加载中</span>
+                            </div>
+                        `;
+                    }
+                });
+            }
+
+            setupFpsCounter() {
+                setInterval(() => {
+                    const now = Date.now();
+                    const deltaTime = (now - this.lastFpsTime) / 1000;
+                    
+                    // 计算总FPS
+                    const totalFrames = this.frameCount.base + this.frameCount.wrist;
+                    const totalFps = totalFrames / deltaTime;
+                    
+                    document.getElementById('stream-fps').textContent = `${totalFps.toFixed(1)} FPS`;
+                    
+                    // 重置计数器
+                    this.frameCount = { base: 0, wrist: 0 };
+                    this.lastFpsTime = now;
+                }, 1000);
+            }
+
+            setupErrorHandling() {
+                // 图像加载错误处理
+                ['base', 'wrist'].forEach(camera => {
+                    const img = document.getElementById(`${camera}-image`);
+                    if (img) {
+                        img.onerror = () => {
+                            this.showError(camera, '图像加载失败');
+                        };
+                    }
+                });
+            }
+
+            toggleStream(camera) {
+                this.streamEnabled[camera] = !this.streamEnabled[camera];
+                
+                const btn = event.target.closest('.control-btn');
+                if (this.streamEnabled[camera]) {
+                    btn.classList.add('active');
+                    // 请求重新开启流
+                    this.socket.emit('enable_camera', { camera: camera });
+                } else {
+                    btn.classList.remove('active');
+                    // 隐藏相机视图
+                    const img = document.getElementById(`${camera}-image`);
+                    const placeholder = document.getElementById(`${camera}-placeholder`);
+                    if (img) img.style.display = 'none';
+                    if (placeholder) {
+                        placeholder.style.display = 'flex';
+                        placeholder.innerHTML = `
+                            <i class="fas fa-eye-slash"></i>
+                            <div>相机已关闭</div>
+                        `;
+                    }
+                    // 通知服务器停止流
+                    this.socket.emit('disable_camera', { camera: camera });
+                }
+            }
+
+            toggleCrosshair() {
+                this.crosshairVisible = !this.crosshairVisible;
+                const crosshairs = document.querySelectorAll('.crosshair');
+                const btn = event.target.closest('.control-btn');
+                
+                crosshairs.forEach(crosshair => {
+                    crosshair.style.display = this.crosshairVisible ? 'block' : 'none';
+                });
+                
+                if (this.crosshairVisible) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            }
+
+            toggleFullscreen() {
+                if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen().then(() => {
+                        document.querySelector('.fullscreen-btn i').className = 'fas fa-compress';
+                    });
+                } else {
+                    document.exitFullscreen().then(() => {
+                        document.querySelector('.fullscreen-btn i').className = 'fas fa-expand';
+                    });
+                }
+            }
+
+            requestCameraStreams() {
+                // 请求开启相机流
+                if (this.socket) {
+                    this.socket.emit('request_cameras', {
+                        cameras: ['base', 'wrist'],
+                        format: 'jpeg',
+                        quality: 80
+                    });
+                }
+            }
+        }
+
+        // 全局实例
+        let cameraViewer;
+
+        // 全局函数
+        function toggleStream(camera) {
+            cameraViewer.toggleStream(camera);
+        }
+
+        function toggleCrosshair() {
+            cameraViewer.toggleCrosshair();
+        }
+
+        function toggleFullscreen() {
+            cameraViewer.toggleFullscreen();
+        }
+
+        // 页面加载完成后初始化
+        window.addEventListener('load', () => {
+            cameraViewer = new CameraViewer();
+            
+            // 延迟请求相机流，确保连接稳定
+            setTimeout(() => {
+                cameraViewer.requestCameraStreams();
+            }, 1000);
+        });
+
+        // 页面可见性变化处理
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                // 页面隐藏时暂停流
+                console.log('Page hidden, pausing camera streams');
+            } else {
+                // 页面显示时恢复流
+                console.log('Page visible, resuming camera streams');
+                cameraViewer.requestCameraStreams();
+            }
+        });
+
+        // 键盘快捷键
+        document.addEventListener('keydown', (e) => {
+            switch(e.key) {
+                case 'f':
+                case 'F':
+                    toggleFullscreen();
+                    break;
+                case 'c':
+                case 'C':
+                    toggleCrosshair();
+                    break;
+                case '1':
+                    toggleStream('base');
+                    break;
+                case '2':
+                    toggleStream('wrist');
+                    break;
+            }
+        });
+    </script>
+</body>
+</html> 

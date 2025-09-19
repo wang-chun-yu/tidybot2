@@ -1,0 +1,1033 @@
+<!-- 增强版Android兼容的TidyBot2遥控界面 -->
+<!-- 改进用户体验，添加更多功能和视觉反馈 -->
+
+<!doctype html>
+<html>
+<head>
+    <meta charset='utf-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1, user-scalable=no'>
+    <meta name='apple-mobile-web-app-capable' content='yes'>
+    <meta name='apple-mobile-web-app-status-bar-style' content='black-translucent'>
+    <title>TidyBot2 Enhanced 遥控</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            touch-action: none;
+            overflow: hidden;
+            height: 100vh;
+            user-select: none;
+        }
+
+        .container {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        /* 顶部状态栏 */
+        .status-bar {
+            background: rgba(0,0,0,0.4);
+            backdrop-filter: blur(10px);
+            padding: 8px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .status-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .status-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .connection-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ff4444;
+            animation: pulse 2s infinite;
+        }
+
+        .connection-indicator.connected {
+            background: #44ff44;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* 主标题区 */
+        .header {
+            text-align: center;
+            padding: 15px;
+            background: rgba(0,0,0,0.3);
+            backdrop-filter: blur(5px);
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 300;
+            margin-bottom: 5px;
+        }
+
+        .robot-status {
+            font-size: 14px;
+            opacity: 0.8;
+        }
+
+        /* 控制区域 */
+        .controls {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 10px;
+            gap: 10px;
+        }
+
+        /* 模式选择器 */
+        .mode-selector {
+            display: flex;
+            background: rgba(0,0,0,0.2);
+            border-radius: 25px;
+            padding: 4px;
+            margin-bottom: 10px;
+        }
+
+        .mode-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: transparent;
+            color: rgba(255,255,255,0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .mode-btn.active {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            box-shadow: 0 2px 10px rgba(255,255,255,0.2);
+        }
+
+        .mode-btn i {
+            font-size: 16px;
+        }
+
+        /* 主控制区 */
+        .main-control {
+            flex: 1;
+            display: flex;
+            gap: 15px;
+            min-height: 0;
+        }
+
+        /* 虚拟摇杆区域 */
+        .joystick-area {
+            flex: 2;
+            display: flex;
+            flex-direction: column;
+            background: rgba(0,0,0,0.2);
+            border-radius: 20px;
+            padding: 20px;
+            position: relative;
+        }
+
+        .joystick-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .joystick {
+            width: 140px;
+            height: 140px;
+            background: rgba(255,255,255,0.1);
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .joystick.active {
+            border-color: rgba(255,255,255,0.6);
+            box-shadow: 0 0 20px rgba(255,255,255,0.3);
+        }
+
+        .joystick-knob {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, #ffffff 0%, #f0f0f0 100%);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            transition: all 0.1s;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            border: 2px solid rgba(255,255,255,0.8);
+        }
+
+        .joystick-info {
+            text-align: center;
+            margin-top: 15px;
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
+        .joystick-values {
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            margin-top: 5px;
+        }
+
+        /* 控制面板 */
+        .control-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        /* 操作按钮 */
+        .action-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .action-btn {
+            padding: 15px 20px;
+            border: none;
+            border-radius: 15px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: rgba(255,255,255,0.15);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .action-btn:active {
+            transform: scale(0.95);
+        }
+
+        .action-btn.primary {
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+            border-color: #4CAF50;
+        }
+
+        .action-btn.danger {
+            background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
+            border-color: #f44336;
+        }
+
+        .action-btn.secondary {
+            background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+            border-color: #2196F3;
+        }
+
+        /* 夹爪控制 */
+        .gripper-section {
+            background: rgba(0,0,0,0.2);
+            border-radius: 15px;
+            padding: 15px;
+            margin-top: 10px;
+        }
+
+        .gripper-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .gripper-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .gripper-btn {
+            width: 40px;
+            height: 40px;
+            border: none;
+            border-radius: 10px;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .gripper-btn:active {
+            background: rgba(255,255,255,0.4);
+            transform: scale(0.9);
+        }
+
+        .gripper-slider {
+            flex: 1;
+            height: 30px;
+            -webkit-appearance: none;
+            background: rgba(255,255,255,0.2);
+            border-radius: 15px;
+            outline: none;
+            margin: 0 10px;
+        }
+
+        .gripper-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 26px;
+            height: 26px;
+            background: linear-gradient(135deg, #ffffff 0%, #f0f0f0 100%);
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+
+        .gripper-value {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            min-width: 35px;
+            text-align: center;
+        }
+
+        /* 传感器信息 */
+        .sensor-panel {
+            background: rgba(0,0,0,0.2);
+            border-radius: 15px;
+            padding: 12px;
+            margin-top: 10px;
+        }
+
+        .sensor-header {
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .sensor-status {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #ff4444;
+        }
+
+        .sensor-status.active {
+            background: #44ff44;
+        }
+
+        .sensor-data {
+            font-family: 'Courier New', monospace;
+            font-size: 10px;
+            line-height: 1.4;
+            opacity: 0.8;
+        }
+
+        /* 底部信息栏 */
+        .bottom-info {
+            background: rgba(0,0,0,0.3);
+            padding: 8px 15px;
+            font-size: 11px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+
+        /* 响应式设计 */
+        @media (orientation: landscape) and (max-height: 600px) {
+            .header {
+                padding: 10px;
+            }
+            .header h1 {
+                font-size: 18px;
+            }
+            .controls {
+                padding: 8px;
+            }
+            .joystick {
+                width: 100px;
+                height: 100px;
+            }
+            .joystick-knob {
+                width: 35px;
+                height: 35px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .main-control {
+                flex-direction: column;
+                gap: 10px;
+            }
+            .joystick-area {
+                flex: none;
+                min-height: 200px;
+            }
+        }
+
+        /* 动画效果 */
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* 触觉反馈指示器 */
+        .haptic-feedback {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100px;
+            height: 100px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 50%;
+            pointer-events: none;
+            opacity: 0;
+            transition: all 0.3s;
+        }
+
+        .haptic-feedback.active {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1.2);
+        }
+    </style>
+</head>
+<body>
+    <div class="container fade-in">
+        <!-- 状态栏 -->
+        <div class="status-bar">
+            <div class="status-left">
+                <div class="connection-indicator" id="connection-indicator"></div>
+                <span id="connection-text">连接中...</span>
+                <span id="device-info">设备ID: <span id="device-id-display"></span></span>
+            </div>
+            <div class="status-right">
+                <i class="fas fa-wifi"></i>
+                <span id="rtt-display">-- ms</span>
+                <i class="fas fa-battery-full"></i>
+                <span id="battery-level">100%</span>
+            </div>
+        </div>
+
+        <!-- 主标题 -->
+        <div class="header">
+            <h1><i class="fas fa-robot"></i> TidyBot2 Enhanced</h1>
+            <div class="robot-status" id="robot-status">准备就绪</div>
+        </div>
+
+        <!-- 控制区域 -->
+        <div class="controls">
+            <!-- 模式选择 -->
+            <div class="mode-selector">
+                <button class="mode-btn active" id="base-mode-btn" onclick="switchMode('base')">
+                    <i class="fas fa-car"></i>
+                    <span>底盘控制</span>
+                </button>
+                <button class="mode-btn" id="arm-mode-btn" onclick="switchMode('arm')">
+                    <i class="fas fa-robot"></i>
+                    <span>机械臂控制</span>
+                </button>
+            </div>
+
+            <!-- 主控制区 -->
+            <div class="main-control">
+                <!-- 虚拟摇杆区域 -->
+                <div class="joystick-area">
+                    <div class="joystick-container">
+                        <div class="joystick" id="joystick">
+                            <div class="joystick-knob" id="joystick-knob"></div>
+                        </div>
+                    </div>
+                    <div class="joystick-info">
+                        <div id="joystick-label">移动控制</div>
+                        <div class="joystick-values" id="joystick-values">X: 0.00 | Y: 0.00</div>
+                    </div>
+                </div>
+
+                <!-- 控制面板 -->
+                <div class="control-panel">
+                    <!-- 操作按钮 -->
+                    <div class="action-buttons">
+                        <button class="action-btn primary" id="start-btn" onclick="toggleEpisode()">
+                            <i class="fas fa-play"></i>
+                            <span>开始操作</span>
+                        </button>
+                        <button class="action-btn secondary" onclick="resetEnv()">
+                            <i class="fas fa-redo"></i>
+                            <span>重置环境</span>
+                        </button>
+                        <button class="action-btn" onclick="toggleSettings()">
+                            <i class="fas fa-cog"></i>
+                            <span>设置</span>
+                        </button>
+                    </div>
+
+                    <!-- 夹爪控制 -->
+                    <div class="gripper-section hidden" id="gripper-section">
+                        <div class="gripper-header">
+                            <span><i class="fas fa-hand-paper"></i> 夹爪控制</span>
+                            <span class="gripper-value" id="gripper-value-display">50%</span>
+                        </div>
+                        <div class="gripper-controls">
+                            <button class="gripper-btn" onclick="adjustGripper(-10)">
+                                <i class="fas fa-minus"></i>
+                            </button>
+                            <input type="range" class="gripper-slider" id="gripper-slider" 
+                                   min="0" max="100" value="50" oninput="updateGripper()">
+                            <button class="gripper-btn" onclick="adjustGripper(10)">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 传感器信息 -->
+                    <div class="sensor-panel">
+                        <div class="sensor-header">
+                            <i class="fas fa-compass"></i>
+                            <span>传感器状态</span>
+                            <div class="sensor-status" id="sensor-status-indicator"></div>
+                        </div>
+                        <div class="sensor-data" id="sensor-data">
+                            状态: <span id="sensor-status-text">未启用</span><br>
+                            方向: <span id="orientation-data">-- | -- | --</span><br>
+                            加速度: <span id="acceleration-data">-- | -- | --</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 底部信息 -->
+        <div class="bottom-info">
+            <span>FPS: <span id="fps-counter">60</span></span>
+            <span>延迟: <span id="latency-info">--</span></span>
+            <span>数据包: <span id="packet-count">0</span></span>
+        </div>
+    </div>
+
+    <!-- 触觉反馈指示器 -->
+    <div class="haptic-feedback" id="haptic-feedback"></div>
+
+    <!-- 脚本 -->
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script>
+        // 全局状态管理
+        class TeleopController {
+            constructor() {
+                this.currentMode = 'base';
+                this.episodeActive = false;
+                this.deviceId = this.generateDeviceId();
+                this.socket = null;
+                
+                // 传感器数据
+                this.sensorData = { alpha: 0, beta: 0, gamma: 0 };
+                this.accelerationData = { x: 0, y: 0, z: 0 };
+                this.sensorSupported = false;
+                
+                // 虚拟摇杆状态
+                this.joystickActive = false;
+                this.joystickCenter = { x: 0, y: 0 };
+                this.joystickValue = { x: 0, y: 0 };
+                
+                // 性能监控
+                this.frameCount = 0;
+                this.lastFpsTime = Date.now();
+                this.packetCount = 0;
+                
+                // RTT统计
+                this.rttStats = new RTTStats(50);
+                
+                this.init();
+            }
+
+            generateDeviceId() {
+                const id = Math.random().toString(36).substring(2, 15);
+                document.getElementById('device-id-display').textContent = id.substring(0, 8);
+                return id;
+            }
+
+            init() {
+                this.setupSocket();
+                this.setupJoystick();
+                this.setupSensors();
+                this.setupUI();
+                this.startPerformanceMonitor();
+                this.updateUI();
+            }
+
+            setupSocket() {
+                this.socket = io();
+                
+                this.socket.on('connect', () => {
+                    this.updateConnectionStatus(true);
+                    console.log('Socket connected');
+                });
+                
+                this.socket.on('disconnect', () => {
+                    this.updateConnectionStatus(false);
+                    console.log('Socket disconnected');
+                });
+                
+                this.socket.on('echo', (timestamp) => {
+                    const rtt = Date.now() - timestamp;
+                    const avgRtt = this.rttStats.calculate(rtt);
+                    document.getElementById('rtt-display').textContent = `${avgRtt.toFixed(0)} ms`;
+                    document.getElementById('latency-info').textContent = `${avgRtt.toFixed(0)}ms`;
+                });
+
+                this.socket.on('robot_status', (status) => {
+                    document.getElementById('robot-status').textContent = status.message || '运行中';
+                });
+            }
+
+            updateConnectionStatus(connected) {
+                const indicator = document.getElementById('connection-indicator');
+                const text = document.getElementById('connection-text');
+                
+                if (connected) {
+                    indicator.classList.add('connected');
+                    text.textContent = '已连接';
+                } else {
+                    indicator.classList.remove('connected');
+                    text.textContent = '连接断开';
+                }
+            }
+
+            setupJoystick() {
+                const joystick = document.getElementById('joystick');
+                const knob = document.getElementById('joystick-knob');
+                
+                const updateJoystickCenter = () => {
+                    const rect = joystick.getBoundingClientRect();
+                    this.joystickCenter.x = rect.left + rect.width / 2;
+                    this.joystickCenter.y = rect.top + rect.height / 2;
+                };
+                
+                // 触摸事件
+                joystick.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    this.joystickActive = true;
+                    joystick.classList.add('active');
+                    updateJoystickCenter();
+                    this.updateJoystickPosition(e.touches[0]);
+                    this.triggerHapticFeedback();
+                });
+                
+                joystick.addEventListener('touchmove', (e) => {
+                    e.preventDefault();
+                    if (this.joystickActive) {
+                        this.updateJoystickPosition(e.touches[0]);
+                    }
+                });
+                
+                joystick.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    this.joystickActive = false;
+                    joystick.classList.remove('active');
+                    this.joystickValue = { x: 0, y: 0 };
+                    knob.style.transform = 'translate(-50%, -50%)';
+                    this.updateJoystickDisplay();
+                });
+                
+                // 鼠标事件（桌面测试）
+                joystick.addEventListener('mousedown', (e) => {
+                    this.joystickActive = true;
+                    joystick.classList.add('active');
+                    updateJoystickCenter();
+                    this.updateJoystickPosition(e);
+                });
+                
+                document.addEventListener('mousemove', (e) => {
+                    if (this.joystickActive) {
+                        this.updateJoystickPosition(e);
+                    }
+                });
+                
+                document.addEventListener('mouseup', () => {
+                    this.joystickActive = false;
+                    joystick.classList.remove('active');
+                    this.joystickValue = { x: 0, y: 0 };
+                    knob.style.transform = 'translate(-50%, -50%)';
+                    this.updateJoystickDisplay();
+                });
+            }
+
+            updateJoystickPosition(pointer) {
+                const deltaX = pointer.clientX - this.joystickCenter.x;
+                const deltaY = pointer.clientY - this.joystickCenter.y;
+                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                const maxDistance = 45;
+                
+                let x = deltaX;
+                let y = deltaY;
+                
+                if (distance > maxDistance) {
+                    x = (deltaX / distance) * maxDistance;
+                    y = (deltaY / distance) * maxDistance;
+                }
+                
+                const knob = document.getElementById('joystick-knob');
+                knob.style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`;
+                
+                this.joystickValue.x = x / maxDistance;
+                this.joystickValue.y = -y / maxDistance;
+                
+                this.updateJoystickDisplay();
+            }
+
+            updateJoystickDisplay() {
+                const display = document.getElementById('joystick-values');
+                display.textContent = `X: ${this.joystickValue.x.toFixed(2)} | Y: ${this.joystickValue.y.toFixed(2)}`;
+            }
+
+            setupSensors() {
+                if (window.DeviceOrientationEvent) {
+                    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                        // iOS 13+ 需要权限
+                        const requestBtn = document.createElement('button');
+                        requestBtn.textContent = '启用传感器';
+                        requestBtn.className = 'action-btn secondary';
+                        requestBtn.onclick = () => {
+                            DeviceOrientationEvent.requestPermission()
+                                .then(response => {
+                                    if (response === 'granted') {
+                                        this.enableSensors();
+                                        requestBtn.remove();
+                                    }
+                                });
+                        };
+                        document.querySelector('.action-buttons').appendChild(requestBtn);
+                    } else {
+                        this.enableSensors();
+                    }
+                }
+                
+                // 加速度计
+                if (window.DeviceMotionEvent) {
+                    window.addEventListener('devicemotion', (event) => {
+                        if (event.acceleration) {
+                            this.accelerationData = {
+                                x: event.acceleration.x || 0,
+                                y: event.acceleration.y || 0,
+                                z: event.acceleration.z || 0
+                            };
+                            this.updateAccelerationDisplay();
+                        }
+                    });
+                }
+            }
+
+            enableSensors() {
+                this.sensorSupported = true;
+                document.getElementById('sensor-status-text').textContent = '已启用';
+                document.getElementById('sensor-status-indicator').classList.add('active');
+                
+                window.addEventListener('deviceorientation', (event) => {
+                    this.sensorData = {
+                        alpha: event.alpha || 0,
+                        beta: event.beta || 0,
+                        gamma: event.gamma || 0
+                    };
+                    this.updateOrientationDisplay();
+                });
+            }
+
+            updateOrientationDisplay() {
+                const display = document.getElementById('orientation-data');
+                display.textContent = 
+                    `${this.sensorData.alpha.toFixed(0)}° | ${this.sensorData.beta.toFixed(0)}° | ${this.sensorData.gamma.toFixed(0)}°`;
+            }
+
+            updateAccelerationDisplay() {
+                const display = document.getElementById('acceleration-data');
+                display.textContent = 
+                    `${this.accelerationData.x.toFixed(1)} | ${this.accelerationData.y.toFixed(1)} | ${this.accelerationData.z.toFixed(1)}`;
+            }
+
+            setupUI() {
+                // 电池状态（模拟）
+                this.updateBatteryLevel();
+                setInterval(() => this.updateBatteryLevel(), 30000);
+                
+                // 防止页面滚动
+                document.addEventListener('touchmove', (e) => {
+                    e.preventDefault();
+                }, { passive: false });
+            }
+
+            updateBatteryLevel() {
+                if ('getBattery' in navigator) {
+                    navigator.getBattery().then((battery) => {
+                        const level = Math.round(battery.level * 100);
+                        document.getElementById('battery-level').textContent = `${level}%`;
+                    });
+                }
+            }
+
+            startPerformanceMonitor() {
+                setInterval(() => {
+                    const now = Date.now();
+                    const fps = Math.round(this.frameCount * 1000 / (now - this.lastFpsTime));
+                    document.getElementById('fps-counter').textContent = fps;
+                    this.frameCount = 0;
+                    this.lastFpsTime = now;
+                }, 1000);
+                
+                // 数据发送循环
+                setInterval(() => {
+                    this.sendControlData();
+                    this.frameCount++;
+                }, 50); // 20Hz
+            }
+
+            triggerHapticFeedback() {
+                if ('vibrate' in navigator) {
+                    navigator.vibrate(50);
+                }
+                
+                const feedback = document.getElementById('haptic-feedback');
+                feedback.classList.add('active');
+                setTimeout(() => {
+                    feedback.classList.remove('active');
+                }, 300);
+            }
+
+            switchMode(mode) {
+                this.currentMode = mode;
+                
+                // 更新按钮状态
+                document.getElementById('base-mode-btn').className = 
+                    mode === 'base' ? 'mode-btn active' : 'mode-btn';
+                document.getElementById('arm-mode-btn').className = 
+                    mode === 'arm' ? 'mode-btn active' : 'mode-btn';
+                
+                this.updateUI();
+                this.triggerHapticFeedback();
+            }
+
+            updateUI() {
+                const gripperSection = document.getElementById('gripper-section');
+                const joystickLabel = document.getElementById('joystick-label');
+                
+                if (this.currentMode === 'arm') {
+                    gripperSection.classList.remove('hidden');
+                    joystickLabel.textContent = '位置控制';
+                } else {
+                    gripperSection.classList.add('hidden');
+                    joystickLabel.textContent = '移动控制';
+                }
+            }
+
+            toggleEpisode() {
+                const btn = document.getElementById('start-btn');
+                const icon = btn.querySelector('i');
+                const text = btn.querySelector('span');
+                
+                if (!this.episodeActive) {
+                    this.episodeActive = true;
+                    btn.className = 'action-btn danger';
+                    icon.className = 'fas fa-stop';
+                    text.textContent = '结束操作';
+                    this.sendCommand('episode_started');
+                } else {
+                    this.episodeActive = false;
+                    btn.className = 'action-btn primary';
+                    icon.className = 'fas fa-play';
+                    text.textContent = '开始操作';
+                    this.sendCommand('episode_ended');
+                }
+                
+                this.triggerHapticFeedback();
+            }
+
+            resetEnv() {
+                this.episodeActive = false;
+                const btn = document.getElementById('start-btn');
+                const icon = btn.querySelector('i');
+                const text = btn.querySelector('span');
+                
+                btn.className = 'action-btn primary';
+                icon.className = 'fas fa-play';
+                text.textContent = '开始操作';
+                
+                this.sendCommand('reset_env');
+                this.triggerHapticFeedback();
+            }
+
+            updateGripper() {
+                const slider = document.getElementById('gripper-slider');
+                const value = slider.value;
+                document.getElementById('gripper-value-display').textContent = `${value}%`;
+            }
+
+            adjustGripper(delta) {
+                const slider = document.getElementById('gripper-slider');
+                const newValue = Math.max(0, Math.min(100, parseInt(slider.value) + delta));
+                slider.value = newValue;
+                this.updateGripper();
+                this.triggerHapticFeedback();
+            }
+
+            sendCommand(command) {
+                if (this.socket) {
+                    this.socket.emit('message', {
+                        timestamp: Date.now(),
+                        device_id: this.deviceId,
+                        state_update: command
+                    });
+                }
+            }
+
+            sendControlData() {
+                if (!this.socket || !this.episodeActive) return;
+                
+                let controlData = {
+                    timestamp: Date.now(),
+                    device_id: this.deviceId,
+                    teleop_mode: this.currentMode
+                };
+                
+                if (this.currentMode === 'base') {
+                    controlData.position = {
+                        x: this.joystickValue.x * 0.1,
+                        y: this.joystickValue.y * 0.1,
+                        z: 0
+                    };
+                    controlData.orientation = {
+                        x: 0,
+                        y: 0,
+                        z: this.sensorSupported ? this.sensorData.gamma * 0.01 : 0,
+                        w: 1
+                    };
+                } else {
+                    controlData.position = {
+                        x: this.joystickValue.x * 0.05,
+                        y: this.joystickValue.y * 0.05,
+                        z: this.sensorSupported ? this.sensorData.beta * 0.002 : 0
+                    };
+                    controlData.orientation = {
+                        x: 0, y: 0, z: 0, w: 1
+                    };
+                    
+                    const gripperSlider = document.getElementById('gripper-slider');
+                    controlData.gripper_delta = (gripperSlider.value - 50) / 50;
+                }
+                
+                this.socket.emit('message', controlData);
+                this.packetCount++;
+                document.getElementById('packet-count').textContent = this.packetCount;
+            }
+        }
+
+        // RTT统计类
+        class RTTStats {
+            constructor(bufferSize) {
+                this.bufferSize = bufferSize;
+                this.bufferIndex = 0;
+                this.rttArray = new Array(bufferSize).fill(0);
+            }
+
+            calculate(rtt) {
+                this.rttArray[this.bufferIndex] = rtt;
+                this.bufferIndex = (this.bufferIndex + 1) % this.bufferSize;
+                const avgRtt = this.rttArray.reduce((acc, cur) => acc + cur, 0) / this.bufferSize;
+                return avgRtt;
+            }
+        }
+
+        // 全局实例
+        let teleopController;
+
+        // 全局函数（保持向后兼容）
+        function switchMode(mode) {
+            teleopController.switchMode(mode);
+        }
+
+        function toggleEpisode() {
+            teleopController.toggleEpisode();
+        }
+
+        function resetEnv() {
+            teleopController.resetEnv();
+        }
+
+        function updateGripper() {
+            teleopController.updateGripper();
+        }
+
+        function adjustGripper(delta) {
+            teleopController.adjustGripper(delta);
+        }
+
+        function toggleSettings() {
+            alert('设置功能开发中...');
+        }
+
+        // 页面加载完成后初始化
+        window.addEventListener('load', () => {
+            teleopController = new TeleopController();
+        });
+
+        // 页面可见性变化处理
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                console.log('Page hidden, pausing operations');
+            } else {
+                console.log('Page visible, resuming operations');
+            }
+        });
+    </script>
+</body>
+</html> 

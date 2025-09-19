@@ -1,0 +1,635 @@
+<!-- 修复传感器问题的Android遥控界面 -->
+<!doctype html>
+<html>
+<head>
+    <meta charset='utf-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1, user-scalable=no'>
+    <meta name='apple-mobile-web-app-capable' content='yes'>
+    <title>TidyBot2 传感器修复版</title>
+    <style>
+        /* 简化样式，重点关注功能 */
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            touch-action: none;
+        }
+        
+        .container {
+            max-width: 400px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .sensor-panel {
+            background: rgba(0,0,0,0.3);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .sensor-status {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        
+        .sensor-data {
+            font-family: monospace;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        
+        .permission-btn {
+            width: 100%;
+            padding: 15px;
+            background: #4CAF50;
+            border: none;
+            border-radius: 10px;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-bottom: 10px;
+        }
+        
+        .permission-btn:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+        
+        .debug-info {
+            background: rgba(0,0,0,0.5);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+            font-size: 12px;
+            font-family: monospace;
+        }
+        
+        .joystick-container {
+            display: flex;
+            justify-content: center;
+            margin: 20px 0;
+        }
+        
+        .joystick {
+            width: 120px;
+            height: 120px;
+            background: rgba(255,255,255,0.2);
+            border: 3px solid rgba(255,255,255,0.5);
+            border-radius: 50%;
+            position: relative;
+            cursor: pointer;
+        }
+        
+        .joystick-knob {
+            width: 40px;
+            height: 40px;
+            background: white;
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            transition: all 0.1s;
+        }
+        
+        .controls {
+            text-align: center;
+            margin-top: 20px;
+        }
+        
+        .control-btn {
+            padding: 12px 20px;
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 25px;
+            color: white;
+            margin: 5px;
+            cursor: pointer;
+        }
+        
+        .control-btn.active {
+            background: #4CAF50;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 TidyBot2 传感器测试</h1>
+            <div id="connection-status">连接中...</div>
+        </div>
+
+        <!-- 传感器权限面板 -->
+        <div class="sensor-panel">
+            <div class="sensor-status" id="sensor-status">传感器未初始化</div>
+            
+            <button class="permission-btn" id="request-permission-btn" onclick="requestAllPermissions()">
+                🔓 请求传感器权限
+            </button>
+            
+            <div class="sensor-data">
+                <div>方向传感器状态: <span id="orientation-status">未启用</span></div>
+                <div>加速度传感器状态: <span id="motion-status">未启用</span></div>
+                <div>权限状态: <span id="permission-status">未请求</span></div>
+                <div>浏览器: <span id="browser-info">检测中...</span></div>
+                <div>HTTPS: <span id="https-status">检测中...</span></div>
+            </div>
+            
+            <div class="sensor-data" style="margin-top: 15px;">
+                <div><strong>方向数据:</strong></div>
+                <div>Alpha (Z轴): <span id="alpha-value">--</span>°</div>
+                <div>Beta (X轴): <span id="beta-value">--</span>°</div>
+                <div>Gamma (Y轴): <span id="gamma-value">--</span>°</div>
+            </div>
+            
+            <div class="sensor-data" style="margin-top: 15px;">
+                <div><strong>加速度数据:</strong></div>
+                <div>X: <span id="accel-x">--</span> m/s²</div>
+                <div>Y: <span id="accel-y">--</span> m/s²</div>
+                <div>Z: <span id="accel-z">--</span> m/s²</div>
+            </div>
+        </div>
+
+        <!-- 虚拟摇杆 -->
+        <div class="joystick-container">
+            <div class="joystick" id="joystick">
+                <div class="joystick-knob" id="joystick-knob"></div>
+            </div>
+        </div>
+        
+        <div style="text-align: center; margin-bottom: 20px;">
+            摇杆值: X=<span id="joystick-x">0.00</span>, Y=<span id="joystick-y">0.00</span>
+        </div>
+
+        <!-- 控制按钮 -->
+        <div class="controls">
+            <button class="control-btn" id="mode-btn" onclick="toggleMode()">
+                🚗 底盘模式
+            </button>
+            <button class="control-btn" id="episode-btn" onclick="toggleEpisode()">
+                ▶️ 开始操作
+            </button>
+        </div>
+
+        <!-- 调试信息 -->
+        <div class="debug-info" id="debug-info">
+            <div><strong>调试信息:</strong></div>
+            <div id="debug-log">等待初始化...</div>
+        </div>
+    </div>
+
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script>
+        // 全局状态
+        let socket = null;
+        let deviceId = Math.random().toString(36).substring(2, 15);
+        let currentMode = 'base';
+        let episodeActive = false;
+        
+        // 传感器状态
+        let sensorData = { alpha: 0, beta: 0, gamma: 0 };
+        let accelerationData = { x: 0, y: 0, z: 0 };
+        let orientationSupported = false;
+        let motionSupported = false;
+        let permissionGranted = false;
+        
+        // 摇杆状态
+        let joystickActive = false;
+        let joystickCenter = { x: 0, y: 0 };
+        let joystickValue = { x: 0, y: 0 };
+        
+        // 调试日志
+        function debugLog(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logElement = document.getElementById('debug-log');
+            logElement.innerHTML += `<div>[${timestamp}] ${message}</div>`;
+            logElement.scrollTop = logElement.scrollHeight;
+            console.log(`[TidyBot2] ${message}`);
+        }
+        
+        // 初始化
+        function init() {
+            debugLog('开始初始化...');
+            
+            // 检测环境
+            detectEnvironment();
+            
+            // 设置Socket连接
+            setupSocket();
+            
+            // 设置摇杆
+            setupJoystick();
+            
+            // 初始传感器检测
+            checkSensorSupport();
+            
+            debugLog('初始化完成');
+        }
+        
+        // 环境检测
+        function detectEnvironment() {
+            // 浏览器检测
+            const userAgent = navigator.userAgent;
+            let browserInfo = 'Unknown';
+            
+            if (userAgent.includes('Chrome')) browserInfo = 'Chrome';
+            else if (userAgent.includes('Firefox')) browserInfo = 'Firefox';
+            else if (userAgent.includes('Safari')) browserInfo = 'Safari';
+            else if (userAgent.includes('Edge')) browserInfo = 'Edge';
+            
+            document.getElementById('browser-info').textContent = browserInfo;
+            
+            // HTTPS检测
+            const isHttps = location.protocol === 'https:';
+            const isLocalhost = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+            document.getElementById('https-status').textContent = 
+                isHttps ? '✅ 安全连接' : (isLocalhost ? '⚠️ 本地HTTP' : '❌ 需要HTTPS');
+            
+            debugLog(`浏览器: ${browserInfo}, HTTPS: ${isHttps}, 本地: ${isLocalhost}`);
+        }
+        
+        // 传感器支持检测
+        function checkSensorSupport() {
+            debugLog('检测传感器支持...');
+            
+            // 方向传感器检测
+            if (window.DeviceOrientationEvent) {
+                orientationSupported = true;
+                document.getElementById('orientation-status').textContent = '✅ 支持';
+                debugLog('设备方向传感器: 支持');
+            } else {
+                document.getElementById('orientation-status').textContent = '❌ 不支持';
+                debugLog('设备方向传感器: 不支持');
+            }
+            
+            // 运动传感器检测
+            if (window.DeviceMotionEvent) {
+                motionSupported = true;
+                document.getElementById('motion-status').textContent = '✅ 支持';
+                debugLog('设备运动传感器: 支持');
+            } else {
+                document.getElementById('motion-status').textContent = '❌ 不支持';
+                debugLog('设备运动传感器: 不支持');
+            }
+            
+            // 更新总体状态
+            if (orientationSupported || motionSupported) {
+                document.getElementById('sensor-status').textContent = '传感器可用 - 需要权限';
+            } else {
+                document.getElementById('sensor-status').textContent = '传感器不支持';
+                document.getElementById('request-permission-btn').disabled = true;
+            }
+        }
+        
+        // 请求所有权限
+        async function requestAllPermissions() {
+            debugLog('开始请求传感器权限...');
+            
+            const btn = document.getElementById('request-permission-btn');
+            btn.disabled = true;
+            btn.textContent = '请求权限中...';
+            
+            try {
+                let permissionResults = [];
+                
+                // iOS 13+ 权限请求
+                if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    debugLog('检测到iOS 13+，请求DeviceOrientationEvent权限');
+                    
+                    try {
+                        const orientationPermission = await DeviceOrientationEvent.requestPermission();
+                        permissionResults.push(`方向传感器: ${orientationPermission}`);
+                        debugLog(`DeviceOrientationEvent权限: ${orientationPermission}`);
+                        
+                        if (orientationPermission === 'granted') {
+                            enableOrientationSensor();
+                        }
+                    } catch (error) {
+                        debugLog(`方向传感器权限请求失败: ${error.message}`);
+                        permissionResults.push(`方向传感器: 错误`);
+                    }
+                }
+                
+                if (typeof DeviceMotionEvent.requestPermission === 'function') {
+                    debugLog('请求DeviceMotionEvent权限');
+                    
+                    try {
+                        const motionPermission = await DeviceMotionEvent.requestPermission();
+                        permissionResults.push(`运动传感器: ${motionPermission}`);
+                        debugLog(`DeviceMotionEvent权限: ${motionPermission}`);
+                        
+                        if (motionPermission === 'granted') {
+                            enableMotionSensor();
+                        }
+                    } catch (error) {
+                        debugLog(`运动传感器权限请求失败: ${error.message}`);
+                        permissionResults.push(`运动传感器: 错误`);
+                    }
+                }
+                
+                // Android/其他浏览器 - 直接尝试启用
+                if (typeof DeviceOrientationEvent.requestPermission !== 'function') {
+                    debugLog('非iOS设备，直接尝试启用传感器');
+                    
+                    if (orientationSupported) {
+                        enableOrientationSensor();
+                        permissionResults.push('方向传感器: 已尝试启用');
+                    }
+                    
+                    if (motionSupported) {
+                        enableMotionSensor();
+                        permissionResults.push('运动传感器: 已尝试启用');
+                    }
+                }
+                
+                // 更新权限状态
+                document.getElementById('permission-status').textContent = permissionResults.join(', ');
+                
+                // 延迟检查传感器是否真正工作
+                setTimeout(checkSensorWorking, 2000);
+                
+            } catch (error) {
+                debugLog(`权限请求过程出错: ${error.message}`);
+                document.getElementById('permission-status').textContent = `错误: ${error.message}`;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '重新请求权限';
+            }
+        }
+        
+        // 启用方向传感器
+        function enableOrientationSensor() {
+            debugLog('启用方向传感器监听器');
+            
+            window.addEventListener('deviceorientation', handleOrientationEvent, true);
+            
+            // 测试事件
+            setTimeout(() => {
+                debugLog(`方向传感器测试: Alpha=${sensorData.alpha}, Beta=${sensorData.beta}, Gamma=${sensorData.gamma}`);
+            }, 1000);
+        }
+        
+        // 启用运动传感器
+        function enableMotionSensor() {
+            debugLog('启用运动传感器监听器');
+            
+            window.addEventListener('devicemotion', handleMotionEvent, true);
+            
+            // 测试事件
+            setTimeout(() => {
+                debugLog(`运动传感器测试: X=${accelerationData.x}, Y=${accelerationData.y}, Z=${accelerationData.z}`);
+            }, 1000);
+        }
+        
+        // 处理方向事件
+        function handleOrientationEvent(event) {
+            sensorData = {
+                alpha: event.alpha || 0,
+                beta: event.beta || 0,
+                gamma: event.gamma || 0
+            };
+            
+            // 更新显示
+            document.getElementById('alpha-value').textContent = sensorData.alpha.toFixed(1);
+            document.getElementById('beta-value').textContent = sensorData.beta.toFixed(1);
+            document.getElementById('gamma-value').textContent = sensorData.gamma.toFixed(1);
+            
+            // 首次接收到数据时更新状态
+            if (!permissionGranted) {
+                permissionGranted = true;
+                document.getElementById('sensor-status').textContent = '✅ 传感器工作正常';
+                debugLog('方向传感器开始工作');
+            }
+        }
+        
+        // 处理运动事件
+        function handleMotionEvent(event) {
+            if (event.acceleration) {
+                accelerationData = {
+                    x: event.acceleration.x || 0,
+                    y: event.acceleration.y || 0,
+                    z: event.acceleration.z || 0
+                };
+                
+                // 更新显示
+                document.getElementById('accel-x').textContent = accelerationData.x.toFixed(2);
+                document.getElementById('accel-y').textContent = accelerationData.y.toFixed(2);
+                document.getElementById('accel-z').textContent = accelerationData.z.toFixed(2);
+            }
+        }
+        
+        // 检查传感器是否真正工作
+        function checkSensorWorking() {
+            debugLog('检查传感器工作状态...');
+            
+            const hasOrientationData = sensorData.alpha !== 0 || sensorData.beta !== 0 || sensorData.gamma !== 0;
+            const hasMotionData = accelerationData.x !== 0 || accelerationData.y !== 0 || accelerationData.z !== 0;
+            
+            if (hasOrientationData || hasMotionData) {
+                debugLog('✅ 传感器数据正常');
+                document.getElementById('sensor-status').textContent = '✅ 传感器工作正常';
+            } else {
+                debugLog('⚠️ 传感器可能未工作或设备静止');
+                document.getElementById('sensor-status').textContent = '⚠️ 传感器数据为零';
+                
+                // 提供故障排除建议
+                setTimeout(() => {
+                    debugLog('故障排除: 请尝试轻微移动设备');
+                    debugLog('故障排除: 检查浏览器是否阻止了传感器访问');
+                    debugLog('故障排除: 尝试使用HTTPS访问');
+                }, 1000);
+            }
+        }
+        
+        // 设置Socket连接
+        function setupSocket() {
+            socket = io();
+            
+            socket.on('connect', () => {
+                document.getElementById('connection-status').textContent = '✅ 已连接';
+                debugLog('Socket连接成功');
+            });
+            
+            socket.on('disconnect', () => {
+                document.getElementById('connection-status').textContent = '❌ 连接断开';
+                debugLog('Socket连接断开');
+            });
+            
+            socket.on('echo', (timestamp) => {
+                const rtt = Date.now() - timestamp;
+                debugLog(`收到回应，延迟: ${rtt}ms`);
+            });
+        }
+        
+        // 设置虚拟摇杆
+        function setupJoystick() {
+            const joystick = document.getElementById('joystick');
+            const knob = document.getElementById('joystick-knob');
+            
+            function updateJoystickCenter() {
+                const rect = joystick.getBoundingClientRect();
+                joystickCenter.x = rect.left + rect.width / 2;
+                joystickCenter.y = rect.top + rect.height / 2;
+            }
+            
+            // 触摸事件
+            joystick.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                joystickActive = true;
+                updateJoystickCenter();
+                updateJoystickPosition(e.touches[0]);
+            });
+            
+            joystick.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                if (joystickActive) {
+                    updateJoystickPosition(e.touches[0]);
+                }
+            });
+            
+            joystick.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                joystickActive = false;
+                joystickValue = { x: 0, y: 0 };
+                knob.style.transform = 'translate(-50%, -50%)';
+                updateJoystickDisplay();
+            });
+            
+            // 鼠标事件（桌面测试）
+            joystick.addEventListener('mousedown', (e) => {
+                joystickActive = true;
+                updateJoystickCenter();
+                updateJoystickPosition(e);
+            });
+            
+            document.addEventListener('mousemove', (e) => {
+                if (joystickActive) {
+                    updateJoystickPosition(e);
+                }
+            });
+            
+            document.addEventListener('mouseup', () => {
+                joystickActive = false;
+                joystickValue = { x: 0, y: 0 };
+                knob.style.transform = 'translate(-50%, -50%)';
+                updateJoystickDisplay();
+            });
+        }
+        
+        function updateJoystickPosition(pointer) {
+            const deltaX = pointer.clientX - joystickCenter.x;
+            const deltaY = pointer.clientY - joystickCenter.y;
+            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+            const maxDistance = 40;
+            
+            let x = deltaX;
+            let y = deltaY;
+            
+            if (distance > maxDistance) {
+                x = (deltaX / distance) * maxDistance;
+                y = (deltaY / distance) * maxDistance;
+            }
+            
+            const knob = document.getElementById('joystick-knob');
+            knob.style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`;
+            
+            joystickValue.x = x / maxDistance;
+            joystickValue.y = -y / maxDistance;
+            
+            updateJoystickDisplay();
+        }
+        
+        function updateJoystickDisplay() {
+            document.getElementById('joystick-x').textContent = joystickValue.x.toFixed(2);
+            document.getElementById('joystick-y').textContent = joystickValue.y.toFixed(2);
+        }
+        
+        // 控制函数
+        function toggleMode() {
+            currentMode = currentMode === 'base' ? 'arm' : 'base';
+            const btn = document.getElementById('mode-btn');
+            btn.textContent = currentMode === 'base' ? '🚗 底盘模式' : '🦾 机械臂模式';
+            debugLog(`切换到${currentMode}模式`);
+        }
+        
+        function toggleEpisode() {
+            episodeActive = !episodeActive;
+            const btn = document.getElementById('episode-btn');
+            btn.textContent = episodeActive ? '⏹️ 停止操作' : '▶️ 开始操作';
+            btn.className = episodeActive ? 'control-btn active' : 'control-btn';
+            
+            if (socket) {
+                socket.emit('message', {
+                    timestamp: Date.now(),
+                    device_id: deviceId,
+                    state_update: episodeActive ? 'episode_started' : 'episode_ended'
+                });
+            }
+            
+            debugLog(`操作${episodeActive ? '开始' : '结束'}`);
+        }
+        
+        // 发送控制数据
+        function sendControlData() {
+            if (!socket || !episodeActive) return;
+            
+            let controlData = {
+                timestamp: Date.now(),
+                device_id: deviceId,
+                teleop_mode: currentMode,
+                joystick: joystickValue,
+                sensor: sensorData,
+                acceleration: accelerationData
+            };
+            
+            if (currentMode === 'base') {
+                controlData.position = {
+                    x: joystickValue.x * 0.1,
+                    y: joystickValue.y * 0.1,
+                    z: 0
+                };
+                controlData.orientation = {
+                    x: 0,
+                    y: 0,
+                    z: permissionGranted ? sensorData.gamma * 0.01 : 0,
+                    w: 1
+                };
+            } else {
+                controlData.position = {
+                    x: joystickValue.x * 0.05,
+                    y: joystickValue.y * 0.05,
+                    z: permissionGranted ? sensorData.beta * 0.002 : 0
+                };
+                controlData.orientation = {
+                    x: 0, y: 0, z: 0, w: 1
+                };
+            }
+            
+            socket.emit('message', controlData);
+        }
+        
+        // 定期发送控制数据
+        setInterval(sendControlData, 100); // 10Hz
+        
+        // 页面加载完成后初始化
+        window.addEventListener('load', init);
+        
+        // 防止页面滚动
+        document.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+        }, { passive: false });
+        
+        debugLog('脚本加载完成');
+    </script>
+</body>
+</html> 

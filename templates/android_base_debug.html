@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TidyBot2 底盘调试界面</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: #1a1a1a;
+            color: #00ff00;
+            margin: 0;
+            padding: 20px;
+            overflow-x: auto;
+        }
+
+        .header {
+            text-align: center;
+            color: #00ffff;
+            margin-bottom: 20px;
+        }
+
+        .debug-panel {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .debug-section {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 15px;
+        }
+
+        .section-title {
+            color: #ffff00;
+            font-weight: bold;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #444;
+            padding-bottom: 5px;
+        }
+
+        .debug-item {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+            font-size: 12px;
+        }
+
+        .debug-value {
+            color: #00ff88;
+            font-weight: bold;
+        }
+
+        .log-panel {
+            background: #000;
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 15px;
+            height: 300px;
+            overflow-y: auto;
+        }
+
+        .log-entry {
+            margin: 2px 0;
+            font-size: 11px;
+        }
+
+        .log-timestamp {
+            color: #888;
+        }
+
+        .log-info { color: #00ff00; }
+        .log-warning { color: #ffff00; }
+        .log-error { color: #ff4444; }
+
+        @media (max-width: 768px) {
+            .debug-panel {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🤖 TidyBot2 底盘控制调试界面</h1>
+        <div id="connectionStatus">连接状态: <span id="statusText">连接中...</span></div>
+    </div>
+
+    <div class="debug-panel">
+        <div class="debug-section">
+            <div class="section-title">底盘状态</div>
+            <div class="debug-item">
+                <span>位置 X:</span>
+                <span class="debug-value" id="posX">0.000 m</span>
+            </div>
+            <div class="debug-item">
+                <span>位置 Y:</span>
+                <span class="debug-value" id="posY">0.000 m</span>
+            </div>
+            <div class="debug-item">
+                <span>角度 θ:</span>
+                <span class="debug-value" id="posTheta">0.000 rad</span>
+            </div>
+            <div class="debug-item">
+                <span>线速度 X:</span>
+                <span class="debug-value" id="velX">0.000 m/s</span>
+            </div>
+            <div class="debug-item">
+                <span>线速度 Y:</span>
+                <span class="debug-value" id="velY">0.000 m/s</span>
+            </div>
+            <div class="debug-item">
+                <span>角速度 Z:</span>
+                <span class="debug-value" id="velZ">0.000 rad/s</span>
+            </div>
+        </div>
+
+        <div class="debug-section">
+            <div class="section-title">控制输入</div>
+            <div class="debug-item">
+                <span>移动 X:</span>
+                <span class="debug-value" id="joyX">0.000</span>
+            </div>
+            <div class="debug-item">
+                <span>移动 Y:</span>
+                <span class="debug-value" id="joyY">0.000</span>
+            </div>
+            <div class="debug-item">
+                <span>旋转方向:</span>
+                <span class="debug-value" id="joyZ">停止</span>
+            </div>
+            <div class="debug-item">
+                <span>线速度比例:</span>
+                <span class="debug-value" id="linearScale">0.80</span>
+            </div>
+            <div class="debug-item">
+                <span>角速度比例:</span>
+                <span class="debug-value" id="angularScale">0.80</span>
+            </div>
+            <div class="debug-item">
+                <span>控制模式:</span>
+                <span class="debug-value" id="controlMode">摇杆+按钮</span>
+            </div>
+        </div>
+
+        <div class="debug-section">
+            <div class="section-title">目标速度</div>
+            <div class="debug-item">
+                <span>目标 VX:</span>
+                <span class="debug-value" id="targetVX">0.000 m/s</span>
+            </div>
+            <div class="debug-item">
+                <span>目标 VY:</span>
+                <span class="debug-value" id="targetVY">0.000 m/s</span>
+            </div>
+            <div class="debug-item">
+                <span>目标 WZ:</span>
+                <span class="debug-value" id="targetWZ">0.000 rad/s</span>
+            </div>
+            <div class="debug-item">
+                <span>线速度幅值:</span>
+                <span class="debug-value" id="linearMag">0.000 m/s</span>
+            </div>
+            <div class="debug-item">
+                <span>角速度幅值:</span>
+                <span class="debug-value" id="angularMag">0.000 rad/s</span>
+            </div>
+        </div>
+
+        <div class="debug-section">
+            <div class="section-title">系统状态</div>
+            <div class="debug-item">
+                <span>操作状态:</span>
+                <span class="debug-value" id="episodeStatus">非活动</span>
+            </div>
+            <div class="debug-item">
+                <span>紧急停止:</span>
+                <span class="debug-value" id="emergencyStatus">否</span>
+            </div>
+            <div class="debug-item">
+                <span>省电模式:</span>
+                <span class="debug-value" id="powerSave">否</span>
+            </div>
+            <div class="debug-item">
+                <span>控制频率:</span>
+                <span class="debug-value" id="controlFreq">0 Hz</span>
+            </div>
+            <div class="debug-item">
+                <span>缓存大小:</span>
+                <span class="debug-value" id="cacheSize">0</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="debug-section">
+        <div class="section-title">实时日志</div>
+        <div class="log-panel" id="logPanel">
+            <div class="log-entry log-info">
+                <span class="log-timestamp">[启动]</span> 调试界面已初始化
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let socket = null;
+        let lastUpdateTime = 0;
+        let updateCount = 0;
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeSocket();
+            startUpdateLoop();
+        });
+
+        function initializeSocket() {
+            socket = io();
+
+            socket.on('connect', function() {
+                updateConnectionStatus(true);
+                addLogEntry('info', '已连接到服务器');
+            });
+
+            socket.on('disconnect', function() {
+                updateConnectionStatus(false);
+                addLogEntry('error', '与服务器断开连接');
+            });
+
+            socket.on('base_config', function(data) {
+                addLogEntry('info', `接收到底盘配置: ${JSON.stringify(data)}`);
+            });
+
+            socket.on('base_status', function(data) {
+                updateDebugDisplay(data);
+                updateCount++;
+            });
+
+            socket.on('performance_stats', function(data) {
+                addLogEntry('info', `性能统计: CPU=${data.cpu_percent}% 内存=${data.memory_percent}%`);
+            });
+        }
+
+        function updateConnectionStatus(connected) {
+            const statusText = document.getElementById('statusText');
+            if (connected) {
+                statusText.textContent = '已连接';
+                statusText.style.color = '#00ff00';
+            } else {
+                statusText.textContent = '断开连接';
+                statusText.style.color = '#ff4444';
+            }
+        }
+
+        function updateDebugDisplay(data) {
+            // 位置信息
+            if (data.position) {
+                document.getElementById('posX').textContent = `${data.position.x.toFixed(3)} m`;
+                document.getElementById('posY').textContent = `${data.position.y.toFixed(3)} m`;
+                document.getElementById('posTheta').textContent = `${data.position.theta.toFixed(3)} rad`;
+            }
+
+            // 速度信息
+            if (data.velocity) {
+                document.getElementById('velX').textContent = `${data.velocity.vx.toFixed(3)} m/s`;
+                document.getElementById('velY').textContent = `${data.velocity.vy.toFixed(3)} m/s`;
+                document.getElementById('velZ').textContent = `${data.velocity.wz.toFixed(3)} rad/s`;
+            }
+
+            // 目标速度
+            if (data.target_velocity) {
+                document.getElementById('targetVX').textContent = `${data.target_velocity.vx.toFixed(3)} m/s`;
+                document.getElementById('targetVY').textContent = `${data.target_velocity.vy.toFixed(3)} m/s`;
+                document.getElementById('targetWZ').textContent = `${data.target_velocity.wz.toFixed(3)} rad/s`;
+                
+                const linearMag = Math.sqrt(data.target_velocity.vx ** 2 + data.target_velocity.vy ** 2);
+                document.getElementById('linearMag').textContent = `${linearMag.toFixed(3)} m/s`;
+                document.getElementById('angularMag').textContent = `${Math.abs(data.target_velocity.wz).toFixed(3)} rad/s`;
+            }
+
+            // 控制输入
+            if (data.joystick_input) {
+                document.getElementById('joyX').textContent = data.joystick_input.x.toFixed(3);
+                document.getElementById('joyY').textContent = data.joystick_input.y.toFixed(3);
+                
+                // 旋转方向显示
+                const rotationValue = data.joystick_input.z;
+                let rotationText = '停止';
+                if (rotationValue > 0) {
+                    rotationText = '顺时针';
+                } else if (rotationValue < 0) {
+                    rotationText = '逆时针';
+                }
+                document.getElementById('joyZ').textContent = rotationText;
+            }
+
+            // 速度比例
+            if (data.speed_scales) {
+                document.getElementById('linearScale').textContent = data.speed_scales.linear.toFixed(2);
+                document.getElementById('angularScale').textContent = data.speed_scales.angular.toFixed(2);
+            }
+
+            // 控制模式
+            if (data.control_mode) {
+                document.getElementById('controlMode').textContent = data.control_mode;
+            }
+
+            // 系统状态
+            document.getElementById('emergencyStatus').textContent = data.emergency_stop ? '是' : '否';
+            document.getElementById('emergencyStatus').style.color = data.emergency_stop ? '#ff4444' : '#00ff88';
+        }
+
+        function startUpdateLoop() {
+            setInterval(() => {
+                const currentTime = Date.now();
+                if (lastUpdateTime > 0) {
+                    const freq = 1000 / (currentTime - lastUpdateTime);
+                    document.getElementById('controlFreq').textContent = `${freq.toFixed(1)} Hz`;
+                }
+                lastUpdateTime = currentTime;
+            }, 100);
+
+            // 请求详细状态
+            setInterval(() => {
+                if (socket && socket.connected) {
+                    fetch('/status')
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.base_status) {
+                                updateSystemStatus(data.base_status);
+                            }
+                        })
+                        .catch(error => {
+                            addLogEntry('error', `获取状态失败: ${error.message}`);
+                        });
+                }
+            }, 1000);
+        }
+
+        function updateSystemStatus(status) {
+            document.getElementById('episodeStatus').textContent = status.episode_active ? '活动' : '非活动';
+            document.getElementById('episodeStatus').style.color = status.episode_active ? '#00ff88' : '#ffbb33';
+            
+            document.getElementById('powerSave').textContent = status.power_save_mode ? '是' : '否';
+            document.getElementById('powerSave').style.color = status.power_save_mode ? '#ffbb33' : '#00ff88';
+            
+            document.getElementById('cacheSize').textContent = status.cache_size || 0;
+        }
+
+        function addLogEntry(level, message) {
+            const logPanel = document.getElementById('logPanel');
+            const timestamp = new Date().toLocaleTimeString();
+            
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${level}`;
+            entry.innerHTML = `<span class="log-timestamp">[${timestamp}]</span> ${message}`;
+            
+            logPanel.appendChild(entry);
+            logPanel.scrollTop = logPanel.scrollHeight;
+            
+            // 限制日志条目数量
+            while (logPanel.children.length > 100) {
+                logPanel.removeChild(logPanel.firstChild);
+            }
+        }
+
+        // 错误处理
+        window.addEventListener('error', function(e) {
+            addLogEntry('error', `JavaScript错误: ${e.message}`);
+        });
+    </script>
+</body>
+</html> 

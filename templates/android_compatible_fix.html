@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>传感器兼容性修复</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            padding: 20px; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        .container { max-width: 400px; margin: 0 auto; }
+        .status { 
+            padding: 15px; 
+            margin: 10px 0; 
+            border-radius: 10px; 
+            font-weight: bold; 
+            text-align: center;
+        }
+        .success { background: rgba(76, 175, 80, 0.8); }
+        .warning { background: rgba(255, 193, 7, 0.8); }
+        .error { background: rgba(244, 67, 54, 0.8); }
+        .info { background: rgba(33, 150, 243, 0.8); }
+        
+        button { 
+            padding: 15px 20px; 
+            font-size: 16px; 
+            background: #4CAF50; 
+            color: white; 
+            border: none; 
+            border-radius: 10px; 
+            cursor: pointer; 
+            margin: 10px 0; 
+            width: 100%; 
+            font-weight: bold;
+        }
+        button:hover { background: #45a049; }
+        button:disabled { background: #666; cursor: not-allowed; }
+        
+        .data-panel { 
+            background: rgba(0,0,0,0.3); 
+            padding: 15px; 
+            border-radius: 10px; 
+            margin: 15px 0; 
+            font-family: monospace; 
+        }
+        
+        .joystick-container {
+            display: flex;
+            justify-content: center;
+            margin: 20px 0;
+        }
+        
+        .joystick {
+            width: 120px;
+            height: 120px;
+            background: rgba(255,255,255,0.2);
+            border: 3px solid rgba(255,255,255,0.5);
+            border-radius: 50%;
+            position: relative;
+            cursor: pointer;
+        }
+        
+        .joystick-knob {
+            width: 40px;
+            height: 40px;
+            background: white;
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            transition: all 0.1s;
+        }
+        
+        .solution-box {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 10px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        .solution-title {
+            font-weight: bold;
+            color: #FFD700;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 传感器兼容性修复</h1>
+        
+        <div id="main-status" class="status warning">正在检测...</div>
+        
+        <div class="data-panel">
+            <strong>系统信息:</strong><br>
+            <div id="system-info">检测中...</div>
+        </div>
+        
+        <div class="data-panel">
+            <strong>API支持检测:</strong><br>
+            <div id="api-support">检测中...</div>
+        </div>
+        
+        <button onclick="runCompatibilityCheck()">🔍 运行兼容性检测</button>
+        <button onclick="enableAlternativeMode()">🎮 启用替代控制模式</button>
+        <button onclick="showBrowserSolutions()">🛠️ 显示浏览器解决方案</button>
+        
+        <!-- 替代控制界面 -->
+        <div id="alternative-control" style="display: none;">
+            <h3>🎮 替代控制模式</h3>
+            <div class="joystick-container">
+                <div class="joystick" id="joystick">
+                    <div class="joystick-knob" id="joystick-knob"></div>
+                </div>
+            </div>
+            
+            <div style="text-align: center; margin: 10px 0;">
+                摇杆值: X=<span id="joystick-x">0.00</span>, Y=<span id="joystick-y">0.00</span>
+            </div>
+            
+            <div style="text-align: center;">
+                <button onclick="toggleMode()">切换模式: <span id="current-mode">底盘</span></button>
+                <button onclick="toggleEpisode()">开始操作</button>
+            </div>
+        </div>
+        
+        <!-- 浏览器解决方案 -->
+        <div id="browser-solutions" style="display: none;">
+            <h3>🛠️ 浏览器解决方案</h3>
+            <div id="solution-content"></div>
+        </div>
+        
+        <div class="data-panel">
+            <strong>调试日志:</strong><br>
+            <div id="debug-log" style="max-height: 200px; overflow-y: auto;">初始化中...</div>
+        </div>
+    </div>
+
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script>
+        let socket = null;
+        let deviceId = Math.random().toString(36).substring(2, 15);
+        let currentMode = 'base';
+        let episodeActive = false;
+        let joystickActive = false;
+        let joystickCenter = { x: 0, y: 0 };
+        let joystickValue = { x: 0, y: 0 };
+        
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logDiv = document.getElementById('debug-log');
+            logDiv.innerHTML += `<div>[${timestamp}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(`[COMPAT] ${message}`);
+        }
+        
+        function updateStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('main-status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+        }
+        
+        // 初始化
+        window.addEventListener('load', function() {
+            log('兼容性修复页面加载完成');
+            runCompatibilityCheck();
+            setupSocket();
+            setupJoystick();
+        });
+        
+        function runCompatibilityCheck() {
+            log('=== 开始兼容性检测 ===');
+            
+            // 系统信息
+            const userAgent = navigator.userAgent;
+            let browser = 'Unknown';
+            let version = 'Unknown';
+            
+            if (userAgent.includes('Chrome/')) {
+                browser = 'Chrome';
+                const match = userAgent.match(/Chrome\/([0-9.]+)/);
+                version = match ? match[1] : 'Unknown';
+            } else if (userAgent.includes('Firefox/')) {
+                browser = 'Firefox';
+                const match = userAgent.match(/Firefox\/([0-9.]+)/);
+                version = match ? match[1] : 'Unknown';
+            } else if (userAgent.includes('Safari/') && !userAgent.includes('Chrome')) {
+                browser = 'Safari';
+                const match = userAgent.match(/Version\/([0-9.]+)/);
+                version = match ? match[1] : 'Unknown';
+            }
+            
+            const isHttps = location.protocol === 'https:';
+            const isLocalhost = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+            
+            document.getElementById('system-info').innerHTML = `
+                浏览器: ${browser} ${version}<br>
+                协议: ${location.protocol}<br>
+                域名: ${location.hostname}<br>
+                HTTPS: ${isHttps ? '✅' : '❌'}<br>
+                本地访问: ${isLocalhost ? '✅' : '❌'}
+            `;
+            
+            log(`浏览器: ${browser} ${version}`);
+            log(`协议: ${location.protocol}, HTTPS: ${isHttps}`);
+            
+            // API支持检测
+            let apiResults = [];
+            let hasAnySupport = false;
+            
+            // 安全检测DeviceOrientationEvent
+            try {
+                if (typeof window.DeviceOrientationEvent !== 'undefined') {
+                    apiResults.push('✅ DeviceOrientationEvent: 支持');
+                    hasAnySupport = true;
+                    log('DeviceOrientationEvent: 支持');
+                    
+                    // 检测权限API
+                    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                        apiResults.push('✅ requestPermission: 支持 (iOS)');
+                        log('requestPermission方法: 支持');
+                    } else {
+                        apiResults.push('ℹ️ requestPermission: 不需要 (Android)');
+                        log('requestPermission方法: 不存在（Android模式）');
+                    }
+                } else {
+                    apiResults.push('❌ DeviceOrientationEvent: 不支持/被禁用');
+                    log('DeviceOrientationEvent: 不支持或被禁用');
+                }
+            } catch (error) {
+                apiResults.push('❌ DeviceOrientationEvent: 访问异常');
+                log(`DeviceOrientationEvent检测异常: ${error.message}`);
+            }
+            
+            // 安全检测DeviceMotionEvent
+            try {
+                if (typeof window.DeviceMotionEvent !== 'undefined') {
+                    apiResults.push('✅ DeviceMotionEvent: 支持');
+                    hasAnySupport = true;
+                    log('DeviceMotionEvent: 支持');
+                } else {
+                    apiResults.push('❌ DeviceMotionEvent: 不支持/被禁用');
+                    log('DeviceMotionEvent: 不支持或被禁用');
+                }
+            } catch (error) {
+                apiResults.push('❌ DeviceMotionEvent: 访问异常');
+                log(`DeviceMotionEvent检测异常: ${error.message}`);
+            }
+            
+            // 检测其他相关API
+            try {
+                if (typeof window.screen !== 'undefined' && typeof window.screen.orientation !== 'undefined') {
+                    apiResults.push('✅ Screen Orientation: 支持');
+                    log('Screen Orientation API: 支持');
+                } else {
+                    apiResults.push('❌ Screen Orientation: 不支持');
+                    log('Screen Orientation API: 不支持');
+                }
+            } catch (error) {
+                apiResults.push('❌ Screen Orientation: 异常');
+                log(`Screen Orientation检测异常: ${error.message}`);
+            }
+            
+            document.getElementById('api-support').innerHTML = apiResults.join('<br>');
+            
+            // 更新主状态
+            if (hasAnySupport) {
+                updateStatus('✅ 部分传感器API可用', 'success');
+                log('检测结果: 部分API可用，可以尝试启用');
+                
+                // 尝试启用传感器
+                setTimeout(() => {
+                    tryEnableSensors();
+                }, 1000);
+            } else {
+                updateStatus('❌ 传感器API完全不可用', 'error');
+                log('检测结果: 传感器API完全不可用');
+                showBrowserSpecificSolutions(browser, version, isHttps);
+            }
+        }
+        
+        function tryEnableSensors() {
+            log('=== 尝试启用传感器 ===');
+            
+            try {
+                if (typeof window.DeviceOrientationEvent !== 'undefined') {
+                    // 检查是否需要权限请求
+                    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                        log('检测到iOS设备，需要权限请求');
+                        
+                        // 创建权限请求按钮
+                        const permissionBtn = document.createElement('button');
+                        permissionBtn.textContent = '🔓 请求iOS传感器权限';
+                        permissionBtn.onclick = async () => {
+                            try {
+                                const permission = await DeviceOrientationEvent.requestPermission();
+                                log(`iOS权限请求结果: ${permission}`);
+                                
+                                if (permission === 'granted') {
+                                    updateStatus('✅ iOS权限已授予', 'success');
+                                    startSensorListening();
+                                } else {
+                                    updateStatus(`❌ iOS权限被拒绝: ${permission}`, 'error');
+                                }
+                            } catch (error) {
+                                log(`iOS权限请求失败: ${error.message}`);
+                                updateStatus(`❌ 权限请求失败: ${error.message}`, 'error');
+                            }
+                        };
+                        
+                        document.querySelector('.container').insertBefore(
+                            permissionBtn, 
+                            document.getElementById('alternative-control')
+                        );
+                    } else {
+                        log('Android设备，直接尝试启用传感器');
+                        startSensorListening();
+                    }
+                } else {
+                    log('DeviceOrientationEvent不可用，跳过传感器启用');
+                    updateStatus('⚠️ 使用替代控制模式', 'warning');
+                }
+            } catch (error) {
+                log(`启用传感器时出错: ${error.message}`);
+                updateStatus('⚠️ 传感器启用失败，使用替代模式', 'warning');
+            }
+        }
+        
+        function startSensorListening() {
+            log('开始监听传感器事件');
+            
+            let sensorWorking = false;
+            
+            try {
+                window.addEventListener('deviceorientation', function(event) {
+                    if (!sensorWorking) {
+                        sensorWorking = true;
+                        updateStatus('✅ 传感器工作正常', 'success');
+                        log('传感器开始工作');
+                    }
+                    
+                    // 这里可以添加传感器数据处理逻辑
+                    const data = {
+                        alpha: event.alpha || 0,
+                        beta: event.beta || 0,
+                        gamma: event.gamma || 0
+                    };
+                    
+                    // 发送传感器数据
+                    if (socket && episodeActive) {
+                        sendSensorData(data);
+                    }
+                });
+                
+                // 5秒后检查传感器是否工作
+                setTimeout(() => {
+                    if (!sensorWorking) {
+                        log('⚠️ 传感器未响应，可能需要移动设备');
+                        updateStatus('⚠️ 请轻微移动设备激活传感器', 'warning');
+                    }
+                }, 5000);
+                
+            } catch (error) {
+                log(`监听传感器事件失败: ${error.message}`);
+                updateStatus('❌ 传感器监听失败', 'error');
+            }
+        }
+        
+        function enableAlternativeMode() {
+            log('启用替代控制模式');
+            document.getElementById('alternative-control').style.display = 'block';
+            updateStatus('🎮 替代控制模式已启用', 'info');
+        }
+        
+        function showBrowserSolutions() {
+            const solutionsDiv = document.getElementById('browser-solutions');
+            solutionsDiv.style.display = 'block';
+            
+            const userAgent = navigator.userAgent;
+            let browser = 'unknown';
+            if (userAgent.includes('Chrome')) browser = 'chrome';
+            else if (userAgent.includes('Firefox')) browser = 'firefox';
+            else if (userAgent.includes('Safari')) browser = 'safari';
+            
+            showBrowserSpecificSolutions(browser, 'current', location.protocol === 'https:');
+        }
+        
+        function showBrowserSpecificSolutions(browser, version, isHttps) {
+            const solutions = {
+                chrome: {
+                    title: '🔧 Chrome浏览器解决方案',
+                    steps: [
+                        '1. 地址栏输入: chrome://settings/content/sensors',
+                        '2. 确保传感器权限设为"允许"',
+                        '3. 地址栏输入: chrome://flags/',
+                        '4. 搜索"Generic Sensor Extra Classes"',
+                        '5. 设置为"Enabled"',
+                        '6. 重启浏览器',
+                        isHttps ? '' : '⚠️ 建议使用HTTPS访问'
+                    ]
+                },
+                firefox: {
+                    title: '🦊 Firefox浏览器解决方案',
+                    steps: [
+                        '1. 地址栏输入: about:config',
+                        '2. 搜索: device.sensors.enabled',
+                        '3. 设置为: true',
+                        '4. 搜索: dom.event.deviceorientation.enabled',
+                        '5. 设置为: true',
+                        '6. 重启浏览器'
+                    ]
+                },
+                safari: {
+                    title: '🧭 Safari浏览器解决方案',
+                    steps: [
+                        '1. 设置 -> Safari -> 隐私与安全性',
+                        '2. 确保"运动与方向访问"已启用',
+                        '3. 必须使用HTTPS访问',
+                        '4. iOS 13+需要明确权限请求'
+                    ]
+                },
+                unknown: {
+                    title: '🔄 通用解决方案',
+                    steps: [
+                        '1. 尝试使用Chrome浏览器',
+                        '2. 清除浏览器缓存和数据',
+                        '3. 检查设备传感器是否正常工作',
+                        '4. 关闭省电模式',
+                        '5. 重启浏览器应用'
+                    ]
+                }
+            };
+            
+            const solution = solutions[browser] || solutions.unknown;
+            const content = `
+                <div class="solution-box">
+                    <div class="solution-title">${solution.title}</div>
+                    ${solution.steps.filter(step => step).map(step => `<div>• ${step}</div>`).join('')}
+                </div>
+            `;
+            
+            document.getElementById('solution-content').innerHTML = content;
+            log(`显示${browser}浏览器解决方案`);
+        }
+        
+        // Socket连接
+        function setupSocket() {
+            try {
+                socket = io();
+                
+                socket.on('connect', () => {
+                    log('Socket连接成功');
+                });
+                
+                socket.on('disconnect', () => {
+                    log('Socket连接断开');
+                });
+            } catch (error) {
+                log(`Socket连接失败: ${error.message}`);
+            }
+        }
+        
+        // 虚拟摇杆设置
+        function setupJoystick() {
+            const joystick = document.getElementById('joystick');
+            const knob = document.getElementById('joystick-knob');
+            
+            if (!joystick || !knob) return;
+            
+            function updateJoystickCenter() {
+                const rect = joystick.getBoundingClientRect();
+                joystickCenter.x = rect.left + rect.width / 2;
+                joystickCenter.y = rect.top + rect.height / 2;
+            }
+            
+            // 触摸事件
+            joystick.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                joystickActive = true;
+                updateJoystickCenter();
+                updateJoystickPosition(e.touches[0]);
+            });
+            
+            joystick.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                if (joystickActive) {
+                    updateJoystickPosition(e.touches[0]);
+                }
+            });
+            
+            joystick.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                joystickActive = false;
+                joystickValue = { x: 0, y: 0 };
+                knob.style.transform = 'translate(-50%, -50%)';
+                updateJoystickDisplay();
+            });
+            
+            // 鼠标事件（桌面测试）
+            joystick.addEventListener('mousedown', (e) => {
+                joystickActive = true;
+                updateJoystickCenter();
+                updateJoystickPosition(e);
+            });
+            
+            document.addEventListener('mousemove', (e) => {
+                if (joystickActive) {
+                    updateJoystickPosition(e);
+                }
+            });
+            
+            document.addEventListener('mouseup', () => {
+                joystickActive = false;
+                joystickValue = { x: 0, y: 0 };
+                knob.style.transform = 'translate(-50%, -50%)';
+                updateJoystickDisplay();
+            });
+            
+            log('虚拟摇杆设置完成');
+        }
+        
+        function updateJoystickPosition(pointer) {
+            const deltaX = pointer.clientX - joystickCenter.x;
+            const deltaY = pointer.clientY - joystickCenter.y;
+            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+            const maxDistance = 40;
+            
+            let x = deltaX;
+            let y = deltaY;
+            
+            if (distance > maxDistance) {
+                x = (deltaX / distance) * maxDistance;
+                y = (deltaY / distance) * maxDistance;
+            }
+            
+            const knob = document.getElementById('joystick-knob');
+            knob.style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`;
+            
+            joystickValue.x = x / maxDistance;
+            joystickValue.y = -y / maxDistance;
+            
+            updateJoystickDisplay();
+            
+            // 发送摇杆数据
+            if (socket && episodeActive) {
+                sendJoystickData();
+            }
+        }
+        
+        function updateJoystickDisplay() {
+            document.getElementById('joystick-x').textContent = joystickValue.x.toFixed(2);
+            document.getElementById('joystick-y').textContent = joystickValue.y.toFixed(2);
+        }
+        
+        function toggleMode() {
+            currentMode = currentMode === 'base' ? 'arm' : 'base';
+            document.getElementById('current-mode').textContent = currentMode === 'base' ? '底盘' : '机械臂';
+            log(`切换到${currentMode}模式`);
+        }
+        
+        function toggleEpisode() {
+            episodeActive = !episodeActive;
+            const btn = event.target;
+            btn.textContent = episodeActive ? '停止操作' : '开始操作';
+            btn.style.background = episodeActive ? '#f44336' : '#4CAF50';
+            
+            log(`操作${episodeActive ? '开始' : '结束'}`);
+        }
+        
+        function sendJoystickData() {
+            if (!socket) return;
+            
+            const controlData = {
+                timestamp: Date.now(),
+                device_id: deviceId,
+                teleop_mode: currentMode,
+                joystick: joystickValue,
+                position: {
+                    x: joystickValue.x * (currentMode === 'base' ? 0.1 : 0.05),
+                    y: joystickValue.y * (currentMode === 'base' ? 0.1 : 0.05),
+                    z: 0
+                },
+                orientation: { x: 0, y: 0, z: 0, w: 1 }
+            };
+            
+            socket.emit('message', controlData);
+        }
+        
+        function sendSensorData(sensorData) {
+            if (!socket) return;
+            
+            const controlData = {
+                timestamp: Date.now(),
+                device_id: deviceId,
+                teleop_mode: currentMode,
+                sensor: sensorData,
+                joystick: joystickValue
+            };
+            
+            socket.emit('message', controlData);
+        }
+    </script>
+</body>
+</html> 

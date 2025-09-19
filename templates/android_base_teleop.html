@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>TidyBot2 底盘遥控</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            height: 100vh;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            padding: 10px;
+        }
+
+        /* 顶部状态栏 */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(0,0,0,0.3);
+            border-radius: 15px;
+            padding: 10px 20px;
+            margin-bottom: 15px;
+            backdrop-filter: blur(10px);
+        }
+
+        .logo {
+            font-size: 20px;
+            font-weight: bold;
+            color: #FFD700;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ff4444;
+            animation: pulse 2s infinite;
+        }
+
+        .status-indicator.connected {
+            background: #44ff44;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        /* 控制面板 */
+        .control-panel {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: auto 1fr auto;
+            gap: 15px;
+        }
+
+        /* 速度控制区域 */
+        .speed-controls {
+            grid-column: 1 / -1;
+            display: flex;
+            gap: 15px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 15px;
+            padding: 15px;
+            backdrop-filter: blur(10px);
+        }
+
+        .speed-group {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .speed-label {
+            font-size: 14px;
+            margin-bottom: 8px;
+            color: #FFD700;
+        }
+
+        .speed-slider {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255,255,255,0.3);
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        .speed-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #FFD700;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }
+
+        .speed-slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #FFD700;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }
+
+        .speed-value {
+            font-size: 12px;
+            margin-top: 5px;
+            color: white;
+        }
+
+        /* 移动摇杆控制区域 */
+        .joystick-container {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0,0,0,0.3);
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+        }
+
+        .joystick {
+            position: relative;
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%);
+            border: 3px solid rgba(255,255,255,0.3);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            touch-action: none;
+        }
+
+        .joystick-knob {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: linear-gradient(45deg, #FFD700, #FFA500);
+            position: absolute;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            transition: all 0.1s ease-out;
+            pointer-events: none;
+        }
+
+        .joystick-label {
+            position: absolute;
+            top: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 14px;
+            color: #FFD700;
+            font-weight: bold;
+        }
+
+        /* 旋转按钮控制区域 */
+        .rotation-container {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0,0,0,0.3);
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+        }
+
+        .rotation-control {
+            position: relative;
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%);
+            border: 3px solid rgba(255,255,255,0.3);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            touch-action: none;
+            overflow: hidden;
+        }
+
+        .rotation-button {
+            position: absolute;
+            width: 50%;
+            height: 100%;
+            top: 0;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: bold;
+            color: rgba(255,255,255,0.7);
+            user-select: none;
+        }
+
+        .rotation-button.left {
+            left: 0;
+            border-radius: 150px 0 0 150px;
+            background: linear-gradient(90deg, rgba(255,100,100,0.3) 0%, rgba(255,100,100,0.1) 100%);
+        }
+
+        .rotation-button.right {
+            right: 0;
+            border-radius: 0 150px 150px 0;
+            background: linear-gradient(270deg, rgba(100,255,100,0.3) 0%, rgba(100,255,100,0.1) 100%);
+        }
+
+        .rotation-button:active,
+        .rotation-button.active {
+            background: linear-gradient(45deg, #FFD700, #FFA500);
+            color: #000;
+            transform: scale(0.95);
+            box-shadow: inset 0 2px 8px rgba(0,0,0,0.3);
+        }
+
+        .rotation-button.left:active,
+        .rotation-button.left.active {
+            background: linear-gradient(90deg, rgba(255,100,100,0.8) 0%, rgba(255,100,100,0.4) 100%);
+        }
+
+        .rotation-button.right:active,
+        .rotation-button.right.active {
+            background: linear-gradient(270deg, rgba(100,255,100,0.8) 0%, rgba(100,255,100,0.4) 100%);
+        }
+
+        .rotation-label {
+            position: absolute;
+            top: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 14px;
+            color: #FFD700;
+            font-weight: bold;
+        }
+
+        .rotation-center {
+            position: absolute;
+            width: 2px;
+            height: 100%;
+            background: rgba(255,255,255,0.3);
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+        }
+
+        .rotation-arrows {
+            position: absolute;
+            font-size: 16px;
+            font-weight: bold;
+            color: rgba(255,255,255,0.8);
+            pointer-events: none;
+        }
+
+        .rotation-arrows.left {
+            left: 25%;
+            transform: translateX(-50%);
+        }
+
+        .rotation-arrows.right {
+            right: 25%;
+            transform: translateX(50%);
+        }
+
+        /* 状态显示区域 */
+        .status-panel {
+            grid-column: 1 / -1;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 15px;
+            padding: 15px;
+            backdrop-filter: blur(10px);
+        }
+
+        .status-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .status-title {
+            font-size: 14px;
+            color: #FFD700;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+            font-size: 12px;
+        }
+
+        .status-value {
+            font-weight: bold;
+            color: #00FF88;
+        }
+
+        /* 控制按钮 */
+        .control-buttons {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+        }
+
+        .control-btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            color: white;
+        }
+
+        .start-btn {
+            background: linear-gradient(45deg, #00C851, #00FF88);
+        }
+
+        .stop-btn {
+            background: linear-gradient(45deg, #ff4444, #cc0000);
+        }
+
+        .reset-btn {
+            background: linear-gradient(45deg, #ffbb33, #ff8800);
+        }
+
+        .control-btn:active {
+            transform: scale(0.95);
+        }
+
+        .control-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* 紧急停止按钮 */
+        .emergency-stop {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(45deg, #ff0000, #cc0000);
+            border: 3px solid white;
+            color: white;
+            font-size: 20px;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 4px 12px rgba(255,0,0,0.4);
+            animation: emergency-pulse 2s infinite;
+        }
+
+        @keyframes emergency-pulse {
+            0% { box-shadow: 0 4px 12px rgba(255,0,0,0.4); }
+            50% { box-shadow: 0 4px 20px rgba(255,0,0,0.8); }
+            100% { box-shadow: 0 4px 12px rgba(255,0,0,0.4); }
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 480px) {
+            .control-panel {
+                grid-template-columns: 1fr;
+                gap: 10px;
+            }
+            
+            .joystick, .rotation-control {
+                width: 120px;
+                height: 120px;
+            }
+            
+            .joystick-knob {
+                width: 40px;
+                height: 40px;
+            }
+            
+            .speed-controls {
+                flex-direction: column;
+                gap: 10px;
+            }
+        }
+
+        /* 震动反馈效果 */
+        .vibrate {
+            animation: vibrate 0.1s linear;
+        }
+
+        @keyframes vibrate {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-2px); }
+            75% { transform: translateX(2px); }
+        }
+
+        /* 活动指示器 */
+        .active-indicator {
+            position: absolute;
+            bottom: -40px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 12px;
+            color: #FFD700;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .active-indicator.show {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 顶部状态栏 -->
+        <div class="header">
+            <div class="logo">🤖 TidyBot2 底盘遥控</div>
+            <div class="connection-status">
+                <div class="status-indicator" id="connectionIndicator"></div>
+                <span id="connectionText">连接中...</span>
+            </div>
+        </div>
+
+        <!-- 紧急停止按钮 -->
+        <div class="emergency-stop" id="emergencyStop" title="紧急停止">
+            ⏹
+        </div>
+
+        <!-- 控制面板 -->
+        <div class="control-panel">
+            <!-- 速度控制 -->
+            <div class="speed-controls">
+                <div class="speed-group">
+                    <div class="speed-label">移动速度</div>
+                    <input type="range" class="speed-slider" id="linearSpeedSlider" 
+                           min="0.1" max="1.0" step="0.1" value="0.8">
+                    <div class="speed-value" id="linearSpeedValue">80%</div>
+                </div>
+                <div class="speed-group">
+                    <div class="speed-label">旋转速度</div>
+                    <input type="range" class="speed-slider" id="angularSpeedSlider" 
+                           min="0.1" max="1.0" step="0.1" value="0.8">
+                    <div class="speed-value" id="angularSpeedValue">80%</div>
+                </div>
+            </div>
+
+            <!-- 移动摇杆 -->
+            <div class="joystick-container">
+                <div class="joystick" id="moveJoystick">
+                    <div class="joystick-label">移动控制</div>
+                    <div class="joystick-knob" id="moveKnob"></div>
+                </div>
+                <div class="active-indicator" id="moveIndicator">移动中...</div>
+            </div>
+
+            <!-- 旋转按钮控制 -->
+            <div class="rotation-container">
+                <div class="rotation-control" id="rotationControl">
+                    <div class="rotation-label">旋转控制</div>
+                    <div class="rotation-center"></div>
+                    <div class="rotation-button left" id="rotateLeft">
+                        <div class="rotation-arrows left">⟲</div>
+                    </div>
+                    <div class="rotation-button right" id="rotateRight">
+                        <div class="rotation-arrows right">⟳</div>
+                    </div>
+                </div>
+                <div class="active-indicator" id="rotateIndicator">旋转中...</div>
+            </div>
+
+            <!-- 状态显示 -->
+            <div class="status-panel">
+                <div class="status-group">
+                    <div class="status-title">位置状态</div>
+                    <div class="status-item">
+                        <span>X:</span>
+                        <span class="status-value" id="positionX">0.00 m</span>
+                    </div>
+                    <div class="status-item">
+                        <span>Y:</span>
+                        <span class="status-value" id="positionY">0.00 m</span>
+                    </div>
+                    <div class="status-item">
+                        <span>角度:</span>
+                        <span class="status-value" id="positionTheta">0.0°</span>
+                    </div>
+                </div>
+                <div class="status-group">
+                    <div class="status-title">速度状态</div>
+                    <div class="status-item">
+                        <span>线速度:</span>
+                        <span class="status-value" id="linearVelocity">0.00 m/s</span>
+                    </div>
+                    <div class="status-item">
+                        <span>角速度:</span>
+                        <span class="status-value" id="angularVelocity">0.0 rad/s</span>
+                    </div>
+                    <div class="status-item">
+                        <span>状态:</span>
+                        <span class="status-value" id="robotStatus">待机</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 控制按钮 -->
+        <div class="control-buttons">
+            <button class="control-btn start-btn" id="startBtn">开始操作</button>
+            <button class="control-btn stop-btn" id="stopBtn" disabled>停止操作</button>
+            <button class="control-btn reset-btn" id="resetBtn">重置环境</button>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let socket = null;
+        let isConnected = false;
+        let episodeActive = false;
+        let linearSpeedScale = 0.8;
+        let angularSpeedScale = 0.8;
+
+        // 控制状态
+        let moveJoystickActive = false;
+        let rotationActive = false;
+        let moveJoystickData = { x: 0, y: 0 };
+        let rotationData = { direction: 0 }; // -1: 逆时针, 0: 停止, 1: 顺时针
+
+        // DOM元素
+        const connectionIndicator = document.getElementById('connectionIndicator');
+        const connectionText = document.getElementById('connectionText');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const emergencyStop = document.getElementById('emergencyStop');
+
+        // 速度滑动条
+        const linearSpeedSlider = document.getElementById('linearSpeedSlider');
+        const angularSpeedSlider = document.getElementById('angularSpeedSlider');
+        const linearSpeedValue = document.getElementById('linearSpeedValue');
+        const angularSpeedValue = document.getElementById('angularSpeedValue');
+
+        // 控制元素
+        const moveJoystick = document.getElementById('moveJoystick');
+        const moveKnob = document.getElementById('moveKnob');
+        const moveIndicator = document.getElementById('moveIndicator');
+        
+        const rotationControl = document.getElementById('rotationControl');
+        const rotateLeft = document.getElementById('rotateLeft');
+        const rotateRight = document.getElementById('rotateRight');
+        const rotateIndicator = document.getElementById('rotateIndicator');
+
+        // 状态显示元素
+        const positionX = document.getElementById('positionX');
+        const positionY = document.getElementById('positionY');
+        const positionTheta = document.getElementById('positionTheta');
+        const linearVelocity = document.getElementById('linearVelocity');
+        const angularVelocity = document.getElementById('angularVelocity');
+        const robotStatus = document.getElementById('robotStatus');
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeSocket();
+            setupEventListeners();
+            setupMoveJoystick();
+            setupRotationButtons();
+            startControlLoop();
+        });
+
+        // 初始化Socket连接
+        function initializeSocket() {
+            socket = io();
+
+            socket.on('connect', function() {
+                isConnected = true;
+                updateConnectionStatus(true);
+                console.log('Connected to base teleop server');
+            });
+
+            socket.on('disconnect', function() {
+                isConnected = false;
+                updateConnectionStatus(false);
+                console.log('Disconnected from server');
+            });
+
+            socket.on('base_config', function(data) {
+                console.log('Base config received:', data);
+            });
+
+            socket.on('base_status', function(data) {
+                updateStatusDisplay(data);
+            });
+
+            socket.on('episode_status', function(data) {
+                episodeActive = data.active;
+                updateControlButtons();
+            });
+
+            socket.on('speed_config_ack', function(data) {
+                console.log('Speed config updated:', data);
+            });
+
+            socket.on('base_stopped', function() {
+                emergencyStopActivated();
+            });
+        }
+
+        // 设置事件监听器
+        function setupEventListeners() {
+            // 控制按钮
+            startBtn.addEventListener('click', startEpisode);
+            stopBtn.addEventListener('click', stopEpisode);
+            resetBtn.addEventListener('click', resetEnvironment);
+            emergencyStop.addEventListener('click', handleEmergencyStop);
+
+            // 速度滑动条
+            linearSpeedSlider.addEventListener('input', updateLinearSpeed);
+            angularSpeedSlider.addEventListener('input', updateAngularSpeed);
+
+            // 防止页面滚动和缩放
+            document.addEventListener('touchmove', function(e) {
+                e.preventDefault();
+            }, { passive: false });
+
+            document.addEventListener('gesturestart', function(e) {
+                e.preventDefault();
+            });
+        }
+
+        // 设置移动摇杆
+        function setupMoveJoystick() {
+            const rect = moveJoystick.getBoundingClientRect();
+            const centerX = rect.width / 2;
+            const centerY = rect.height / 2;
+            const maxDistance = centerX - 25; // 减去摇杆球半径
+
+            let isDragging = false;
+
+            function handleStart(e) {
+                isDragging = true;
+                moveJoystick.classList.add('vibrate');
+                setTimeout(() => moveJoystick.classList.remove('vibrate'), 100);
+                
+                // 触觉反馈
+                if (navigator.vibrate) {
+                    navigator.vibrate(10);
+                }
+            }
+
+            function handleMove(e) {
+                if (!isDragging) return;
+
+                e.preventDefault();
+                
+                const touch = e.touches ? e.touches[0] : e;
+                const rect = moveJoystick.getBoundingClientRect();
+                
+                let x = touch.clientX - rect.left - centerX;
+                let y = touch.clientY - rect.top - centerY;
+                
+                const distance = Math.sqrt(x * x + y * y);
+                
+                if (distance > maxDistance) {
+                    x = (x / distance) * maxDistance;
+                    y = (y / distance) * maxDistance;
+                }
+                
+                moveKnob.style.transform = `translate(${x}px, ${y}px)`;
+                
+                // 归一化到 -1 到 1
+                const normalizedX = x / maxDistance;
+                const normalizedY = -y / maxDistance; // Y轴反转
+                
+                moveJoystickData = {
+                    x: normalizedX,
+                    y: normalizedY
+                };
+                
+                moveJoystickActive = Math.abs(normalizedX) > 0.1 || Math.abs(normalizedY) > 0.1;
+                updateActiveIndicators();
+            }
+
+            function handleEnd() {
+                isDragging = false;
+                moveKnob.style.transform = 'translate(0px, 0px)';
+                
+                moveJoystickData = { x: 0, y: 0 };
+                moveJoystickActive = false;
+                updateActiveIndicators();
+            }
+
+            // 触摸事件
+            moveJoystick.addEventListener('touchstart', handleStart, { passive: false });
+            document.addEventListener('touchmove', handleMove, { passive: false });
+            document.addEventListener('touchend', handleEnd);
+
+            // 鼠标事件（用于调试）
+            moveJoystick.addEventListener('mousedown', handleStart);
+            document.addEventListener('mousemove', handleMove);
+            document.addEventListener('mouseup', handleEnd);
+        }
+
+        // 设置旋转按钮
+        function setupRotationButtons() {
+            // 左旋转按钮（逆时针）
+            function startLeftRotation() {
+                rotationData.direction = -1; // 逆时针
+                rotationActive = true;
+                rotateLeft.classList.add('active');
+                updateActiveIndicators();
+                
+                // 触觉反馈
+                if (navigator.vibrate) {
+                    navigator.vibrate(10);
+                }
+            }
+
+            function stopLeftRotation() {
+                rotationData.direction = 0;
+                rotationActive = false;
+                rotateLeft.classList.remove('active');
+                updateActiveIndicators();
+            }
+
+            // 右旋转按钮（顺时针）
+            function startRightRotation() {
+                rotationData.direction = 1; // 顺时针
+                rotationActive = true;
+                rotateRight.classList.add('active');
+                updateActiveIndicators();
+                
+                // 触觉反馈
+                if (navigator.vibrate) {
+                    navigator.vibrate(10);
+                }
+            }
+
+            function stopRightRotation() {
+                rotationData.direction = 0;
+                rotationActive = false;
+                rotateRight.classList.remove('active');
+                updateActiveIndicators();
+            }
+
+            // 左按钮事件
+            rotateLeft.addEventListener('touchstart', startLeftRotation, { passive: false });
+            rotateLeft.addEventListener('touchend', stopLeftRotation, { passive: false });
+            rotateLeft.addEventListener('mousedown', startLeftRotation);
+            rotateLeft.addEventListener('mouseup', stopLeftRotation);
+            rotateLeft.addEventListener('mouseleave', stopLeftRotation);
+
+            // 右按钮事件
+            rotateRight.addEventListener('touchstart', startRightRotation, { passive: false });
+            rotateRight.addEventListener('touchend', stopRightRotation, { passive: false });
+            rotateRight.addEventListener('mousedown', startRightRotation);
+            rotateRight.addEventListener('mouseup', stopRightRotation);
+            rotateRight.addEventListener('mouseleave', stopRightRotation);
+
+            // 防止默认行为
+            rotateLeft.addEventListener('touchmove', function(e) { e.preventDefault(); }, { passive: false });
+            rotateRight.addEventListener('touchmove', function(e) { e.preventDefault(); }, { passive: false });
+        }
+
+        // 更新活动指示器
+        function updateActiveIndicators() {
+            if (moveJoystickActive) {
+                moveIndicator.classList.add('show');
+            } else {
+                moveIndicator.classList.remove('show');
+            }
+
+            if (rotationActive) {
+                rotateIndicator.classList.add('show');
+                rotateIndicator.textContent = rotationData.direction > 0 ? '顺时针旋转...' : '逆时针旋转...';
+            } else {
+                rotateIndicator.classList.remove('show');
+            }
+        }
+
+        // 控制循环
+        function startControlLoop() {
+            setInterval(function() {
+                if (isConnected && episodeActive) {
+                    sendControlData();
+                }
+            }, 50); // 20Hz
+        }
+
+        // 发送控制数据
+        function sendControlData() {
+            const controlData = {
+                linear_x: moveJoystickData.x || 0,
+                linear_y: moveJoystickData.y || 0,
+                angular_z: rotationData.direction || 0, // 使用方向值而不是归一化值
+                timestamp: Date.now()
+            };
+
+            socket.emit('base_control', controlData);
+        }
+
+        // 更新连接状态
+        function updateConnectionStatus(connected) {
+            if (connected) {
+                connectionIndicator.classList.add('connected');
+                connectionText.textContent = '已连接';
+            } else {
+                connectionIndicator.classList.remove('connected');
+                connectionText.textContent = '连接中...';
+            }
+        }
+
+        // 更新状态显示
+        function updateStatusDisplay(data) {
+            if (data.position) {
+                positionX.textContent = `${data.position.x.toFixed(2)} m`;
+                positionY.textContent = `${data.position.y.toFixed(2)} m`;
+                positionTheta.textContent = `${(data.position.theta * 180 / Math.PI).toFixed(1)}°`;
+            }
+
+            if (data.velocity) {
+                const linearSpeed = Math.sqrt(data.velocity.vx * data.velocity.vx + data.velocity.vy * data.velocity.vy);
+                linearVelocity.textContent = `${linearSpeed.toFixed(2)} m/s`;
+                angularVelocity.textContent = `${data.velocity.wz.toFixed(2)} rad/s`;
+            }
+
+            if (data.emergency_stop) {
+                robotStatus.textContent = '紧急停止';
+                robotStatus.style.color = '#ff4444';
+            } else if (episodeActive) {
+                robotStatus.textContent = '运行中';
+                robotStatus.style.color = '#00FF88';
+            } else {
+                robotStatus.textContent = '待机';
+                robotStatus.style.color = '#ffbb33';
+            }
+        }
+
+        // 控制按钮函数
+        function startEpisode() {
+            socket.emit('episode_control', { action: 'start' });
+        }
+
+        function stopEpisode() {
+            socket.emit('episode_control', { action: 'stop' });
+        }
+
+        function resetEnvironment() {
+            socket.emit('episode_control', { action: 'reset' });
+        }
+
+        function handleEmergencyStop() {
+            socket.emit('base_stop');
+            emergencyStopActivated();
+            
+            // 触觉反馈
+            if (navigator.vibrate) {
+                navigator.vibrate([100, 50, 100]);
+            }
+        }
+
+        function emergencyStopActivated() {
+            episodeActive = false;
+            moveJoystickData = { x: 0, y: 0 };
+            rotationData = { direction: 0 };
+            moveJoystickActive = false;
+            rotationActive = false;
+            updateControlButtons();
+            updateActiveIndicators();
+            
+            // 重置按钮状态
+            rotateLeft.classList.remove('active');
+            rotateRight.classList.remove('active');
+            
+            // 视觉反馈
+            document.body.style.background = 'linear-gradient(135deg, #ff4444 0%, #cc0000 100%)';
+            setTimeout(() => {
+                document.body.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+            }, 1000);
+        }
+
+        // 更新控制按钮状态
+        function updateControlButtons() {
+            startBtn.disabled = episodeActive;
+            stopBtn.disabled = !episodeActive;
+        }
+
+        // 速度控制函数
+        function updateLinearSpeed() {
+            linearSpeedScale = parseFloat(linearSpeedSlider.value);
+            linearSpeedValue.textContent = `${Math.round(linearSpeedScale * 100)}%`;
+            
+            socket.emit('speed_config', {
+                linear_scale: linearSpeedScale,
+                angular_scale: angularSpeedScale
+            });
+        }
+
+        function updateAngularSpeed() {
+            angularSpeedScale = parseFloat(angularSpeedSlider.value);
+            angularSpeedValue.textContent = `${Math.round(angularSpeedScale * 100)}%`;
+            
+            socket.emit('speed_config', {
+                linear_scale: linearSpeedScale,
+                angular_scale: angularSpeedScale
+            });
+        }
+
+        // 错误处理
+        window.addEventListener('error', function(e) {
+            console.error('JavaScript error:', e);
+        });
+
+        window.addEventListener('unhandledrejection', function(e) {
+            console.error('Unhandled promise rejection:', e);
+        });
+    </script>
+</body>
+</html> 

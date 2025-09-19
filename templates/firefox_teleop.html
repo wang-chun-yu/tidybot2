@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Firefox传感器控制</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            padding: 20px; 
+            background: linear-gradient(135deg, #FF6B35 0%, #F7931E 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        .container { max-width: 400px; margin: 0 auto; }
+        .header { text-align: center; margin-bottom: 20px; }
+        .status { 
+            padding: 15px; 
+            margin: 10px 0; 
+            border-radius: 10px; 
+            font-weight: bold; 
+            text-align: center;
+        }
+        .success { background: rgba(76, 175, 80, 0.8); }
+        .warning { background: rgba(255, 193, 7, 0.8); }
+        .error { background: rgba(244, 67, 54, 0.8); }
+        .info { background: rgba(33, 150, 243, 0.8); }
+        
+        button { 
+            padding: 15px 20px; 
+            font-size: 16px; 
+            background: #FF6B35; 
+            color: white; 
+            border: none; 
+            border-radius: 10px; 
+            cursor: pointer; 
+            margin: 10px 0; 
+            width: 100%; 
+            font-weight: bold;
+        }
+        button:hover { background: #E55A2B; }
+        button:disabled { background: #666; cursor: not-allowed; }
+        
+        .sensor-panel { 
+            background: rgba(0,0,0,0.3); 
+            padding: 15px; 
+            border-radius: 10px; 
+            margin: 15px 0; 
+            font-family: monospace; 
+        }
+        
+        .joystick-container {
+            display: flex;
+            justify-content: center;
+            margin: 20px 0;
+        }
+        
+        .joystick {
+            width: 120px;
+            height: 120px;
+            background: rgba(255,255,255,0.2);
+            border: 3px solid rgba(255,255,255,0.5);
+            border-radius: 50%;
+            position: relative;
+            cursor: pointer;
+        }
+        
+        .joystick-knob {
+            width: 40px;
+            height: 40px;
+            background: white;
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            transition: all 0.1s;
+        }
+        
+        .controls {
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .control-btn {
+            padding: 12px 20px;
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 25px;
+            color: white;
+            margin: 5px;
+            cursor: pointer;
+            display: inline-block;
+        }
+        
+        .control-btn.active {
+            background: #4CAF50;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🦊 Firefox传感器控制</h1>
+            <div id="connection-status">连接中...</div>
+        </div>
+
+        <div id="main-status" class="status info">🦊 Firefox传感器控制已优化</div>
+        
+        <div class="sensor-panel">
+            <strong>浏览器信息:</strong><br>
+            <div id="browser-info">检测中...</div>
+        </div>
+        
+        <div class="sensor-panel">
+            <strong>传感器状态:</strong><br>
+            <div id="sensor-status">检测中...</div>
+        </div>
+        
+        <button onclick="enableFirefoxSensors()">🔥 启用Firefox传感器</button>
+        
+        <div class="sensor-panel">
+            <strong>传感器数据:</strong><br>
+            <div>Alpha (Z轴): <span id="alpha-value">--</span>°</div>
+            <div>Beta (X轴): <span id="beta-value">--</span>°</div>
+            <div>Gamma (Y轴): <span id="gamma-value">--</span>°</div>
+        </div>
+
+        <!-- 虚拟摇杆 -->
+        <div class="joystick-container">
+            <div class="joystick" id="joystick">
+                <div class="joystick-knob" id="joystick-knob"></div>
+            </div>
+        </div>
+        
+        <div style="text-align: center; margin-bottom: 20px;">
+            摇杆值: X=<span id="joystick-x">0.00</span>, Y=<span id="joystick-y">0.00</span>
+        </div>
+
+        <!-- 控制按钮 -->
+        <div class="controls">
+            <div class="control-btn" id="mode-btn" onclick="toggleMode()">
+                🚗 底盘模式
+            </div>
+            <div class="control-btn" id="episode-btn" onclick="toggleEpisode()">
+                ▶️ 开始操作
+            </div>
+        </div>
+
+        <div class="sensor-panel">
+            <strong>调试日志:</strong><br>
+            <div id="debug-log" style="max-height: 150px; overflow-y: auto;">Firefox优化版初始化中...</div>
+        </div>
+    </div>
+
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script>
+        let socket = null;
+        let deviceId = Math.random().toString(36).substring(2, 15);
+        let currentMode = 'base';
+        let episodeActive = false;
+        let joystickActive = false;
+        let joystickCenter = { x: 0, y: 0 };
+        let joystickValue = { x: 0, y: 0 };
+        let sensorData = { alpha: 0, beta: 0, gamma: 0 };
+        let sensorEnabled = false;
+        
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logDiv = document.getElementById('debug-log');
+            logDiv.innerHTML += `<div>[${timestamp}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(`[FIREFOX] ${message}`);
+        }
+        
+        function updateStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('main-status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+        }
+        
+        // 初始化
+        window.addEventListener('load', function() {
+            log('Firefox优化版页面加载完成');
+            detectBrowser();
+            setupSocket();
+            setupJoystick();
+            checkFirefoxSensorSupport();
+        });
+        
+        function detectBrowser() {
+            const userAgent = navigator.userAgent;
+            let browserInfo = 'Unknown';
+            
+            if (userAgent.includes('Firefox/')) {
+                const match = userAgent.match(/Firefox\/([0-9.]+)/);
+                browserInfo = `Firefox ${match ? match[1] : 'Unknown'}`;
+                log('✅ 检测到Firefox浏览器 - 传感器兼容性良好');
+            } else if (userAgent.includes('Chrome')) {
+                browserInfo = 'Chrome (建议使用Firefox)';
+                log('⚠️ 检测到Chrome浏览器 - 建议使用Firefox获得更好的传感器支持');
+            } else {
+                browserInfo = userAgent.substring(0, 50);
+                log('ℹ️ 检测到其他浏览器');
+            }
+            
+            document.getElementById('browser-info').innerHTML = `
+                浏览器: ${browserInfo}<br>
+                协议: ${location.protocol}<br>
+                域名: ${location.hostname}
+            `;
+        }
+        
+        function checkFirefoxSensorSupport() {
+            log('检查Firefox传感器支持...');
+            
+            let supportInfo = [];
+            
+            // 检查DeviceOrientationEvent
+            if (typeof window.DeviceOrientationEvent !== 'undefined') {
+                supportInfo.push('✅ DeviceOrientationEvent: 支持');
+                log('DeviceOrientationEvent: 支持');
+            } else {
+                supportInfo.push('❌ DeviceOrientationEvent: 不支持');
+                log('DeviceOrientationEvent: 不支持');
+            }
+            
+            // 检查DeviceMotionEvent
+            if (typeof window.DeviceMotionEvent !== 'undefined') {
+                supportInfo.push('✅ DeviceMotionEvent: 支持');
+                log('DeviceMotionEvent: 支持');
+            } else {
+                supportInfo.push('❌ DeviceMotionEvent: 不支持');
+                log('DeviceMotionEvent: 不支持');
+            }
+            
+            // Firefox特殊检查
+            if (navigator.userAgent.includes('Firefox')) {
+                supportInfo.push('🦊 Firefox: 优化支持');
+                log('Firefox浏览器检测完成');
+            }
+            
+            document.getElementById('sensor-status').innerHTML = supportInfo.join('<br>');
+        }
+        
+        function enableFirefoxSensors() {
+            log('=== 启用Firefox传感器 ===');
+            updateStatus('启用传感器中...', 'warning');
+            
+            try {
+                // Firefox通常不需要权限请求，直接启用监听器
+                if (typeof window.DeviceOrientationEvent !== 'undefined') {
+                    log('设置DeviceOrientationEvent监听器');
+                    
+                    window.addEventListener('deviceorientation', function(event) {
+                        if (!sensorEnabled) {
+                            sensorEnabled = true;
+                            updateStatus('✅ 传感器工作正常', 'success');
+                            log('🎉 传感器开始工作！');
+                        }
+                        
+                        sensorData = {
+                            alpha: event.alpha || 0,
+                            beta: event.beta || 0,
+                            gamma: event.gamma || 0
+                        };
+                        
+                        // 更新显示
+                        document.getElementById('alpha-value').textContent = sensorData.alpha.toFixed(1);
+                        document.getElementById('beta-value').textContent = sensorData.beta.toFixed(1);
+                        document.getElementById('gamma-value').textContent = sensorData.gamma.toFixed(1);
+                        
+                        // 发送数据
+                        if (socket && episodeActive) {
+                            sendControlData();
+                        }
+                    });
+                    
+                    log('传感器监听器设置完成');
+                    
+                    // 5秒后检查是否有数据
+                    setTimeout(() => {
+                        if (!sensorEnabled) {
+                            log('⚠️ 传感器可能需要手动激活，请轻微移动设备');
+                            updateStatus('⚠️ 请轻微移动设备激活传感器', 'warning');
+                        }
+                    }, 5000);
+                    
+                } else {
+                    log('❌ DeviceOrientationEvent不可用');
+                    updateStatus('❌ 设备不支持方向传感器', 'error');
+                    
+                    // 显示Firefox配置建议
+                    setTimeout(() => {
+                        showFirefoxConfig();
+                    }, 1000);
+                }
+                
+            } catch (error) {
+                log(`传感器启用失败: ${error.message}`);
+                updateStatus(`❌ 传感器启用失败: ${error.message}`, 'error');
+            }
+        }
+        
+        function showFirefoxConfig() {
+            log('显示Firefox配置建议');
+            
+            const configDiv = document.createElement('div');
+            configDiv.className = 'sensor-panel';
+            configDiv.innerHTML = `
+                <strong>🛠️ Firefox配置建议:</strong><br>
+                1. 地址栏输入: about:config<br>
+                2. 搜索: device.sensors.enabled<br>
+                3. 设置为: true<br>
+                4. 搜索: dom.event.deviceorientation.enabled<br>
+                5. 设置为: true<br>
+                6. 重启Firefox浏览器
+            `;
+            
+            document.querySelector('.container').insertBefore(
+                configDiv, 
+                document.querySelector('.joystick-container')
+            );
+        }
+        
+        // Socket连接
+        function setupSocket() {
+            try {
+                socket = io();
+                
+                socket.on('connect', () => {
+                    document.getElementById('connection-status').textContent = '✅ 已连接';
+                    log('Socket连接成功');
+                });
+                
+                socket.on('disconnect', () => {
+                    document.getElementById('connection-status').textContent = '❌ 连接断开';
+                    log('Socket连接断开');
+                });
+                
+                socket.on('echo', (timestamp) => {
+                    const rtt = Date.now() - timestamp;
+                    log(`收到回应，延迟: ${rtt}ms`);
+                });
+            } catch (error) {
+                log(`Socket连接失败: ${error.message}`);
+            }
+        }
+        
+        // 虚拟摇杆设置
+        function setupJoystick() {
+            const joystick = document.getElementById('joystick');
+            const knob = document.getElementById('joystick-knob');
+            
+            function updateJoystickCenter() {
+                const rect = joystick.getBoundingClientRect();
+                joystickCenter.x = rect.left + rect.width / 2;
+                joystickCenter.y = rect.top + rect.height / 2;
+            }
+            
+            // 触摸事件
+            joystick.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                joystickActive = true;
+                updateJoystickCenter();
+                updateJoystickPosition(e.touches[0]);
+            });
+            
+            joystick.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                if (joystickActive) {
+                    updateJoystickPosition(e.touches[0]);
+                }
+            });
+            
+            joystick.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                joystickActive = false;
+                joystickValue = { x: 0, y: 0 };
+                knob.style.transform = 'translate(-50%, -50%)';
+                updateJoystickDisplay();
+            });
+            
+            // 鼠标事件
+            joystick.addEventListener('mousedown', (e) => {
+                joystickActive = true;
+                updateJoystickCenter();
+                updateJoystickPosition(e);
+            });
+            
+            document.addEventListener('mousemove', (e) => {
+                if (joystickActive) {
+                    updateJoystickPosition(e);
+                }
+            });
+            
+            document.addEventListener('mouseup', () => {
+                joystickActive = false;
+                joystickValue = { x: 0, y: 0 };
+                knob.style.transform = 'translate(-50%, -50%)';
+                updateJoystickDisplay();
+            });
+            
+            log('虚拟摇杆设置完成');
+        }
+        
+        function updateJoystickPosition(pointer) {
+            const deltaX = pointer.clientX - joystickCenter.x;
+            const deltaY = pointer.clientY - joystickCenter.y;
+            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+            const maxDistance = 40;
+            
+            let x = deltaX;
+            let y = deltaY;
+            
+            if (distance > maxDistance) {
+                x = (deltaX / distance) * maxDistance;
+                y = (deltaY / distance) * maxDistance;
+            }
+            
+            const knob = document.getElementById('joystick-knob');
+            knob.style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`;
+            
+            joystickValue.x = x / maxDistance;
+            joystickValue.y = -y / maxDistance;
+            
+            updateJoystickDisplay();
+            
+            // 发送摇杆数据
+            if (socket && episodeActive) {
+                sendControlData();
+            }
+        }
+        
+        function updateJoystickDisplay() {
+            document.getElementById('joystick-x').textContent = joystickValue.x.toFixed(2);
+            document.getElementById('joystick-y').textContent = joystickValue.y.toFixed(2);
+        }
+        
+        function toggleMode() {
+            currentMode = currentMode === 'base' ? 'arm' : 'base';
+            const btn = document.getElementById('mode-btn');
+            btn.textContent = currentMode === 'base' ? '🚗 底盘模式' : '🦾 机械臂模式';
+            log(`切换到${currentMode}模式`);
+        }
+        
+        function toggleEpisode() {
+            episodeActive = !episodeActive;
+            const btn = document.getElementById('episode-btn');
+            btn.textContent = episodeActive ? '⏹️ 停止操作' : '▶️ 开始操作';
+            btn.className = episodeActive ? 'control-btn active' : 'control-btn';
+            
+            if (socket) {
+                socket.emit('message', {
+                    timestamp: Date.now(),
+                    device_id: deviceId,
+                    state_update: episodeActive ? 'episode_started' : 'episode_ended'
+                });
+            }
+            
+            log(`操作${episodeActive ? '开始' : '结束'}`);
+        }
+        
+        function sendControlData() {
+            if (!socket) return;
+            
+            let controlData = {
+                timestamp: Date.now(),
+                device_id: deviceId,
+                teleop_mode: currentMode,
+                joystick: joystickValue,
+                sensor: sensorData
+            };
+            
+            if (currentMode === 'base') {
+                controlData.position = {
+                    x: joystickValue.x * 0.1,
+                    y: joystickValue.y * 0.1,
+                    z: 0
+                };
+                controlData.orientation = {
+                    x: 0,
+                    y: 0,
+                    z: sensorEnabled ? sensorData.gamma * 0.01 : 0,
+                    w: 1
+                };
+            } else {
+                controlData.position = {
+                    x: joystickValue.x * 0.05,
+                    y: joystickValue.y * 0.05,
+                    z: sensorEnabled ? sensorData.beta * 0.002 : 0
+                };
+                controlData.orientation = {
+                    x: 0, y: 0, z: 0, w: 1
+                };
+            }
+            
+            socket.emit('message', controlData);
+        }
+        
+        // 定期发送控制数据
+        setInterval(() => {
+            if (socket && episodeActive) {
+                sendControlData();
+            }
+        }, 100); // 10Hz
+        
+        // 防止页面滚动
+        document.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+        }, { passive: false });
+        
+        log('Firefox优化版脚本加载完成');
+    </script>
+</body>
+</html> 

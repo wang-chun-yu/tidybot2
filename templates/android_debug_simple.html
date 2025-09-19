@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>传感器调试</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            padding: 20px; 
+            background: #f0f0f0; 
+        }
+        .status { 
+            padding: 10px; 
+            margin: 10px 0; 
+            border-radius: 5px; 
+            font-weight: bold; 
+        }
+        .success { background: #d4edda; color: #155724; }
+        .warning { background: #fff3cd; color: #856404; }
+        .error { background: #f8d7da; color: #721c24; }
+        button { 
+            padding: 15px 20px; 
+            font-size: 16px; 
+            background: #007bff; 
+            color: white; 
+            border: none; 
+            border-radius: 5px; 
+            cursor: pointer; 
+            margin: 10px 0; 
+            width: 100%; 
+        }
+        button:hover { background: #0056b3; }
+        .data { 
+            font-family: monospace; 
+            background: #e9ecef; 
+            padding: 10px; 
+            border-radius: 5px; 
+            margin: 10px 0; 
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 传感器调试工具</h1>
+    
+    <div id="browser-info" class="status warning">检测浏览器...</div>
+    <div id="api-support" class="status warning">检测API支持...</div>
+    <div id="permission-status" class="status warning">权限状态: 未知</div>
+    
+    <button onclick="testBasicSupport()">1️⃣ 测试基础支持</button>
+    <button onclick="requestPermissionManual()">2️⃣ 手动请求权限</button>
+    <button onclick="startListening()">3️⃣ 开始监听传感器</button>
+    <button onclick="testConsoleOutput()">4️⃣ 控制台输出测试</button>
+    
+    <div class="data">
+        <strong>传感器数据:</strong><br>
+        <div id="sensor-data">等待数据...</div>
+    </div>
+    
+    <div class="data">
+        <strong>调试日志:</strong><br>
+        <div id="debug-log">初始化中...</div>
+    </div>
+
+    <script>
+        let isListening = false;
+        
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logDiv = document.getElementById('debug-log');
+            logDiv.innerHTML += `<div>[${timestamp}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(`[DEBUG] ${message}`);
+        }
+        
+        function updateStatus(elementId, message, type = 'warning') {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.className = `status ${type}`;
+        }
+        
+        // 初始化检测
+        window.addEventListener('load', function() {
+            log('页面加载完成，开始初始化检测');
+            
+            // 浏览器检测
+            const userAgent = navigator.userAgent;
+            let browser = 'Unknown';
+            if (userAgent.includes('Chrome')) browser = 'Chrome';
+            else if (userAgent.includes('Firefox')) browser = 'Firefox';
+            else if (userAgent.includes('Safari')) browser = 'Safari';
+            
+            updateStatus('browser-info', `浏览器: ${browser} | HTTPS: ${location.protocol === 'https:'}`, 'success');
+            log(`浏览器: ${browser}, User Agent: ${userAgent}`);
+            
+            testBasicSupport();
+        });
+        
+        function testBasicSupport() {
+            log('=== 开始基础支持测试 ===');
+            
+            const orientationSupport = !!window.DeviceOrientationEvent;
+            const motionSupport = !!window.DeviceMotionEvent;
+            const hasRequestPermission = typeof DeviceOrientationEvent.requestPermission === 'function';
+            
+            log(`DeviceOrientationEvent支持: ${orientationSupport}`);
+            log(`DeviceMotionEvent支持: ${motionSupport}`);
+            log(`requestPermission方法: ${hasRequestPermission}`);
+            
+            if (orientationSupport || motionSupport) {
+                updateStatus('api-support', '✅ 传感器API支持', 'success');
+                log('传感器API基础支持正常');
+            } else {
+                updateStatus('api-support', '❌ 传感器API不支持', 'error');
+                log('传感器API不支持，可能是浏览器限制');
+            }
+        }
+        
+        async function requestPermissionManual() {
+            log('=== 开始手动权限请求 ===');
+            updateStatus('permission-status', '请求权限中...', 'warning');
+            
+            try {
+                // iOS权限请求
+                if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    log('检测到iOS设备，请求DeviceOrientationEvent权限');
+                    
+                    const permission = await DeviceOrientationEvent.requestPermission();
+                    log(`DeviceOrientationEvent权限结果: ${permission}`);
+                    
+                    if (permission === 'granted') {
+                        updateStatus('permission-status', '✅ iOS权限已授予', 'success');
+                        log('iOS权限请求成功');
+                    } else {
+                        updateStatus('permission-status', `❌ iOS权限被拒绝: ${permission}`, 'error');
+                        log(`iOS权限请求失败: ${permission}`);
+                    }
+                } else {
+                    // Android/其他设备
+                    log('检测到Android/其他设备，尝试直接启用传感器');
+                    updateStatus('permission-status', '✅ Android设备，无需权限请求', 'success');
+                    log('Android设备，权限模式不同，直接尝试启用');
+                }
+                
+                // 无论如何都尝试开始监听
+                setTimeout(() => {
+                    log('权限请求完成，准备开始监听');
+                    startListening();
+                }, 1000);
+                
+            } catch (error) {
+                log(`权限请求异常: ${error.message}`);
+                updateStatus('permission-status', `❌ 权限请求失败: ${error.message}`, 'error');
+            }
+        }
+        
+        function startListening() {
+            if (isListening) {
+                log('已经在监听传感器，跳过重复启动');
+                return;
+            }
+            
+            log('=== 开始监听传感器事件 ===');
+            isListening = true;
+            
+            // 监听设备方向
+            window.addEventListener('deviceorientation', function(event) {
+                const data = {
+                    alpha: (event.alpha || 0).toFixed(1),
+                    beta: (event.beta || 0).toFixed(1), 
+                    gamma: (event.gamma || 0).toFixed(1)
+                };
+                
+                document.getElementById('sensor-data').innerHTML = 
+                    `Alpha: ${data.alpha}° | Beta: ${data.beta}° | Gamma: ${data.gamma}°`;
+                
+                // 第一次收到数据时记录
+                if (!window.firstOrientationReceived) {
+                    window.firstOrientationReceived = true;
+                    log(`✅ 首次接收到方向数据: ${JSON.stringify(data)}`);
+                    updateStatus('permission-status', '✅ 传感器工作正常', 'success');
+                }
+            });
+            
+            // 监听设备运动
+            window.addEventListener('devicemotion', function(event) {
+                if (event.acceleration && !window.firstMotionReceived) {
+                    window.firstMotionReceived = true;
+                    const accel = {
+                        x: (event.acceleration.x || 0).toFixed(2),
+                        y: (event.acceleration.y || 0).toFixed(2),
+                        z: (event.acceleration.z || 0).toFixed(2)
+                    };
+                    log(`✅ 首次接收到运动数据: ${JSON.stringify(accel)}`);
+                }
+            });
+            
+            log('传感器事件监听器已设置');
+            
+            // 5秒后检查是否有数据
+            setTimeout(() => {
+                if (!window.firstOrientationReceived && !window.firstMotionReceived) {
+                    log('⚠️ 5秒内未收到传感器数据，可能存在问题');
+                    updateStatus('permission-status', '⚠️ 未收到传感器数据', 'warning');
+                    
+                    // 提供调试建议
+                    log('调试建议:');
+                    log('1. 尝试轻微移动设备');
+                    log('2. 检查浏览器权限设置');
+                    log('3. 尝试刷新页面重新请求权限');
+                    log('4. 查看浏览器控制台是否有错误信息');
+                }
+            }, 5000);
+        }
+        
+        function testConsoleOutput() {
+            log('=== 控制台输出测试 ===');
+            console.log('这是一个测试消息');
+            console.log('DeviceOrientationEvent:', window.DeviceOrientationEvent);
+            console.log('DeviceMotionEvent:', window.DeviceMotionEvent);
+            console.log('requestPermission方法:', typeof DeviceOrientationEvent.requestPermission);
+            console.log('当前协议:', location.protocol);
+            console.log('当前域名:', location.hostname);
+            
+            log('控制台输出完成，请检查浏览器开发者工具');
+            alert('请打开浏览器开发者工具查看控制台输出！\n\n在Chrome中：点击菜单 -> 更多工具 -> 开发者工具 -> Console标签');
+        }
+    </script>
+</body>
+</html> 
