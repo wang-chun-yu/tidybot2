@@ -1,49 +1,89 @@
 <mujoco model="tidybot">
+  <!-- ========== 编译器设置 ========== -->
+  <!-- angle="radian": 使用弧度制（而非度数）
+       meshdir: 3D网格文件的相对路径 -->
   <compiler angle="radian" meshdir="../assets"/>
 
+  <!-- ========== 仿真选项 ========== -->
+  <!-- integrator="implicitfast": 快速隐式积分器，适合刚性接触
+       cone="elliptic": 使用椭圆摩擦锥（更真实）
+       impratio="10": 阻抗比，控制接触的软硬程度 -->
   <option integrator="implicitfast"/>
   <option cone="elliptic" impratio="10"/>
 
+  <!-- ========== 默认参数定义 ========== -->
+  <!-- 使用分层默认值，子元素继承父元素的属性 -->
   <default>
+    <!-- === 移动底盘默认参数 === -->
     <default class="base">
+      <!-- 视觉几何体：仅用于渲染，不参与碰撞 -->
       <default class="base/visual">
+        <!-- contype/conaffinity="0": 不参与碰撞检测
+             group="2": 渲染组2 -->
         <geom type="mesh" contype="0" conaffinity="0" group="2"/>
       </default>
+      <!-- 碰撞几何体：用于物理碰撞 -->
       <default class="base/collision">
         <geom type="mesh" group="3"/>
       </default>
     </default>
 
+    <!-- === Kinova Gen3 机械臂默认参数 === -->
     <default class="gen3">
+      <!-- 视觉几何体：浅灰色 -->
       <default class="gen3/visual">
         <geom type="mesh" contype="0" conaffinity="0" group="2" rgba="0.75294 0.75294 0.75294 1"/>
       </default>
       <default class="gen3/collision">
         <geom type="mesh" group="3"/>
       </default>
+      <!-- 大型执行器：用于前4个关节（肩部、肘部） -->
       <default class="large_actuator">
+        <!-- kp: 位置增益 2000 N·m/rad
+             kv: 速度增益（阻尼）100 N·m·s/rad
+             forcerange: 力矩范围 ±105 N·m -->
         <position kp="2000" kv="100" forcerange="-105 105"/>
       </default>
+      <!-- 小型执行器：用于后3个关节（腕部） -->
       <default class="small_actuator">
         <position kp="500" kv="50" forcerange="-52 52"/>
       </default>
     </default>
 
+    <!-- === Robotiq 2F-85 夹爪默认参数 === -->
     <default class="2f85">
+      <!-- 网格缩放：STL文件单位是毫米，转换为米 -->
       <mesh scale="0.001 0.001 0.001"/>
+      <!-- 使用仿射偏置类型的通用执行器 -->
       <general biastype="affine"/>
 
+      <!-- 所有关节默认绕x轴旋转 -->
       <joint axis="1 0 0"/>
+      
+      <!-- 驱动关节：主动驱动的关节 -->
       <default class="driver">
+        <!-- range: 运动范围 0-0.8 rad (约46度)
+             armature: 转子惯量 0.005 kg·m²
+             damping: 阻尼 0.1 N·m·s/rad
+             solimplimit/solreflimit: 接触求解器参数 -->
         <joint range="0 0.8" armature="0.005" damping="0.1" solimplimit="0.95 0.99 0.001" solreflimit="0.005 1"/>
       </default>
+      
+      <!-- 从动关节：四杆机构的从动件 -->
       <default class="follower">
         <joint range="-0.872664 0.872664" armature="0.001" pos="0 -0.018 0.0065" solimplimit="0.95 0.99 0.001"
           solreflimit="0.005 1"/>
       </default>
+      
+      <!-- 弹簧连杆：提供自适应抓取的柔顺性 -->
       <default class="spring_link">
+        <!-- stiffness: 弹簧刚度 0.05 N·m/rad
+             springref: 弹簧静止角度 2.62 rad
+             damping: 弹簧阻尼 0.00125 N·m·s/rad -->
         <joint range="-0.29670597283 0.8" armature="0.001" stiffness="0.05" springref="2.62" damping="0.00125"/>
       </default>
+      
+      <!-- 耦合关节：连接驱动和从动机构 -->
       <default class="coupler">
         <joint range="-1.57 0" armature="0.001" solimplimit="0.95 0.99 0.001" solreflimit="0.005 1"/>
       </default>
@@ -53,10 +93,15 @@
       </default>
       <default class="2f85/collision">
         <geom type="mesh" group="3"/>
+        <!-- 夹爪接触垫1：高摩擦力区域 -->
         <default class="pad_box1">
+          <!-- friction: 摩擦系数 0.7（较高）
+               solimp/solref: 软接触参数，模拟橡胶垫的柔软性
+               priority: 碰撞优先级 -->
           <geom mass="0" type="box" pos="0 -0.0026 0.028125" size="0.011 0.004 0.009375" friction="0.7"
             solimp="0.95 0.99 0.001" solref="0.004 1" priority="1" rgba="0.55 0.55 0.55 1"/>
         </default>
+        <!-- 夹爪接触垫2：中等摩擦力区域 -->
         <default class="pad_box2">
           <geom mass="0" type="box" pos="0 -0.0026 0.009375" size="0.011 0.004 0.009375" friction="0.6"
             solimp="0.95 0.99 0.001" solref="0.004 1" priority="1" rgba="0.45 0.45 0.45 1"/>
@@ -64,49 +109,63 @@
       </default>
     </default>
 
+    <!-- 站点（site）默认值：用于传感器和可视化标记 -->
     <site size="0.001" rgba="0.5 0.5 0.5 0.3" group="4"/>
   </default>
 
+  <!-- ========== 资源定义（材质和网格） ========== -->
   <asset>
+    <!-- === 底盘材质 === -->
     <material name="black" rgba="0.11372549 0.11372549 0.10196078 1"/>
     <material name="gray" rgba="0.62745098 0.65098039 0.64705882 1"/>
     <material name="dark_gray" rgba="0.35294118 0.37647059 0.37254902 1"/>
-    <mesh file="base/bumper.stl"/>
-    <mesh file="base/bottom_plate.stl"/>
-    <mesh file="base/body.stl"/>
-    <mesh file="base/top_plate.stl"/>
-    <mesh file="base/arm_plate.stl"/>
+    
+    <!-- === 底盘网格文件 === -->
+    <mesh file="base/bumper.stl"/>          <!-- 防撞条 -->
+    <mesh file="base/bottom_plate.stl"/>    <!-- 底板 -->
+    <mesh file="base/body.stl"/>            <!-- 车身 -->
+    <mesh file="base/top_plate.stl"/>       <!-- 顶板 -->
+    <mesh file="base/arm_plate.stl"/>       <!-- 机械臂安装板 -->
 
-    <mesh name="gen3/base_link" file="gen3/base_link.stl"/>
-    <mesh name="shoulder_link" file="gen3/shoulder_link.stl"/>
-    <mesh name="half_arm_1_link" file="gen3/half_arm_1_link.stl"/>
-    <mesh name="half_arm_2_link" file="gen3/half_arm_2_link.stl"/>
-    <mesh name="forearm_link" file="gen3/forearm_link.stl"/>
-    <mesh name="spherical_wrist_1_link" file="gen3/spherical_wrist_1_link.stl"/>
-    <mesh name="spherical_wrist_2_link" file="gen3/spherical_wrist_2_link.stl"/>
-    <mesh name="bracelet_with_vision_link" file="gen3/bracelet_with_vision_link.stl"/>
+    <!-- === Kinova Gen3 机械臂网格文件 === -->
+    <mesh name="gen3/base_link" file="gen3/base_link.stl"/>                      <!-- 基座 -->
+    <mesh name="shoulder_link" file="gen3/shoulder_link.stl"/>                   <!-- 肩部 -->
+    <mesh name="half_arm_1_link" file="gen3/half_arm_1_link.stl"/>              <!-- 上臂1 -->
+    <mesh name="half_arm_2_link" file="gen3/half_arm_2_link.stl"/>              <!-- 上臂2 -->
+    <mesh name="forearm_link" file="gen3/forearm_link.stl"/>                    <!-- 前臂 -->
+    <mesh name="spherical_wrist_1_link" file="gen3/spherical_wrist_1_link.stl"/> <!-- 球形腕1 -->
+    <mesh name="spherical_wrist_2_link" file="gen3/spherical_wrist_2_link.stl"/> <!-- 球形腕2 -->
+    <mesh name="bracelet_with_vision_link" file="gen3/bracelet_with_vision_link.stl"/> <!-- 腕环（带视觉） -->
 
+    <!-- === Robotiq 2F-85 夹爪材质和网格 === -->
     <material name="metal" rgba="0.58 0.58 0.58 1"/>
     <material name="silicone" rgba="0.1882 0.1882 0.1882 1"/>
     <material name="2f85/gray" rgba="0.4627 0.4627 0.4627 1"/>
     <material name="2f85/black" rgba="0.149 0.149 0.149 1"/>
-    <mesh class="2f85" file="2f85/base.stl"/>
-    <mesh class="2f85" file="2f85/driver.stl"/>
-    <mesh class="2f85" file="2f85/coupler.stl"/>
-    <mesh class="2f85" file="2f85/follower.stl"/>
-    <mesh class="2f85" file="2f85/pad.stl"/>
-    <mesh class="2f85" file="2f85/silicone_pad.stl"/>
-    <mesh class="2f85" file="2f85/spring_link.stl"/>
+    <mesh class="2f85" file="2f85/base.stl"/>         <!-- 夹爪基座 -->
+    <mesh class="2f85" file="2f85/driver.stl"/>       <!-- 驱动件 -->
+    <mesh class="2f85" file="2f85/coupler.stl"/>      <!-- 耦合件 -->
+    <mesh class="2f85" file="2f85/follower.stl"/>     <!-- 从动件 -->
+    <mesh class="2f85" file="2f85/pad.stl"/>          <!-- 接触垫 -->
+    <mesh class="2f85" file="2f85/silicone_pad.stl"/> <!-- 硅胶垫 -->
+    <mesh class="2f85" file="2f85/spring_link.stl"/>  <!-- 弹簧连杆 -->
   </asset>
 
+  <!-- ========== 世界主体（机器人运动学树） ========== -->
   <worldbody>
+    <!-- === 移动底盘 === -->
     <body name="base_link">
+      <!-- 惯性参数：质量60kg，惯性张量对角元素 -->
       <inertial pos="0 0 0.035" mass="60" diaginertia="0.001 0.001 0.001"/>
-      <joint name="joint_x" type="slide" axis="1 0 0"/>
-      <joint name="joint_y" type="slide" axis="0 1 0"/>
-      <joint name="joint_th"/>
-      <geom class="base/visual" mesh="bumper" material="black" pos="0 0 1.0"/>
-      <geom class="base/visual" mesh="bottom_plate" material="dark_gray" pos="0 0 2.0"/>
+      
+      <!-- 3个关节定义底盘的平面运动 -->
+      <joint name="joint_x" type="slide" axis="1 0 0"/>   <!-- X方向滑动 -->
+      <joint name="joint_y" type="slide" axis="0 1 0"/>   <!-- Y方向滑动 -->
+      <joint name="joint_th"/>                            <!-- Z轴旋转（默认） -->
+      
+      <!-- 视觉和碰撞几何体 -->
+      <geom class="base/visual" mesh="bumper" material="black" pos="0 0 0.035"/>
+      <geom class="base/visual" mesh="bottom_plate" material="dark_gray" pos="0 0 1.0"/>
       <geom class="base/visual" mesh="body" material="gray"/>
       <geom class="base/visual" mesh="top_plate" material="dark_gray"/>
       <geom class="base/visual" mesh="arm_plate" material="gray"/>
@@ -115,69 +174,103 @@
       <geom class="base/collision" mesh="body"/>
       <geom class="base/collision" mesh="top_plate"/>
       <geom class="base/collision" mesh="arm_plate"/>
+      
+      <!-- 基座相机：安装在底盘前方，向前下方看 -->
+      <!-- pos: 相机位置 (x=0.2525m 前方, z=0.335m 高度)
+           euler: 欧拉角 (俯仰-45度, 偏航-90度)
+           fovy: 垂直视场角 52.23度
+           resolution: 640×360 像素 -->
       <camera name="base" pos="0.2525 0 0.335" euler="0 -0.7853981634 -1.5707963268" fovy="52.23384539951277"
         resolution="640 360"/>
+      
+      <!-- === Kinova Gen3 机械臂基座 === -->
+      <!-- pos: 安装在底盘顶部，高度0.335m -->
       <body name="gen3/base_link" pos="0 0 0.335" quat="1 0 0 0">
         <inertial pos="-0.000648 -0.000166 0.084487" quat="0.999294 0.00139618 -0.0118387 0.035636" mass="1.697"
           diaginertia="0.00462407 0.00449437 0.00207755"/>
         <geom class="gen3/visual" mesh="gen3/base_link"/>
         <geom class="gen3/collision" mesh="gen3/base_link"/>
+        
+        <!-- === 关节1：肩部旋转（绕Z轴） === -->
         <body name="shoulder_link" pos="0 0 0.15643" quat="0 1 0 0">
           <inertial pos="-2.3e-05 -0.010364 -0.07336" quat="0.707051 0.0451246 -0.0453544 0.704263" mass="1.3773"
             diaginertia="0.00488868 0.00457 0.00135132"/>
-          <joint name="joint_1"/>
+          <joint name="joint_1"/>  <!-- 无限制旋转 -->
           <geom class="gen3/visual" mesh="shoulder_link"/>
           <geom class="gen3/collision" mesh="shoulder_link"/>
+          
+          <!-- === 关节2：肩部俯仰 === -->
           <body name="half_arm_1_link" pos="0 0.005375 -0.12838" quat="1 1 0 0">
             <inertial pos="-4.4e-05 -0.09958 -0.013278" quat="0.482348 0.516286 -0.516862 0.483366" mass="1.1636"
               diaginertia="0.0113017 0.011088 0.00102532"/>
+            <!-- range: 限制范围 ±128.5度 -->
             <joint name="joint_2" range="-2.24 2.24"/>
             <geom class="gen3/visual" mesh="half_arm_1_link"/>
             <geom class="gen3/collision" mesh="half_arm_1_link"/>
+            
+            <!-- === 关节3：肘部旋转 === -->
             <body name="half_arm_2_link" pos="0 -0.21038 -0.006375" quat="1 -1 0 0">
               <inertial pos="-4.4e-05 -0.006641 -0.117892" quat="0.706144 0.0213722 -0.0209128 0.707437" mass="1.1636"
                 diaginertia="0.0111633 0.010932 0.00100671"/>
-              <joint name="joint_3"/>
+              <joint name="joint_3"/>  <!-- 无限制旋转 -->
               <geom class="gen3/visual" mesh="half_arm_2_link"/>
               <geom class="gen3/collision" mesh="half_arm_2_link"/>
+              
+              <!-- === 关节4：前臂旋转 === -->
               <body name="forearm_link" pos="0 0.006375 -0.21038" quat="1 1 0 0">
                 <inertial pos="-1.8e-05 -0.075478 -0.015006" quat="0.483678 0.515961 -0.515859 0.483455" mass="0.9302"
                   diaginertia="0.00834839 0.008147 0.000598606"/>
+                <!-- range: 限制范围 ±147度 -->
                 <joint name="joint_4" range="-2.57 2.57"/>
                 <geom class="gen3/visual" mesh="forearm_link"/>
                 <geom class="gen3/collision" mesh="forearm_link"/>
+                
+                <!-- === 关节5：腕部旋转1 === -->
                 <body name="spherical_wrist_1_link" pos="0 -0.20843 -0.006375" quat="1 -1 0 0">
                   <inertial pos="1e-06 -0.009432 -0.063883" quat="0.703558 0.0707492 -0.0707492 0.703558" mass="0.6781"
                     diaginertia="0.00165901 0.001596 0.000346988"/>
-                  <joint name="joint_5"/>
+                  <joint name="joint_5"/>  <!-- 无限制旋转 -->
                   <geom class="gen3/visual" mesh="spherical_wrist_1_link"/>
                   <geom class="gen3/collision" mesh="spherical_wrist_1_link"/>
+                  
+                  <!-- === 关节6：腕部旋转2 === -->
                   <body name="spherical_wrist_2_link" pos="0 0.00017505 -0.10593" quat="1 1 0 0">
                     <inertial pos="1e-06 -0.045483 -0.00965" quat="0.44426 0.550121 -0.550121 0.44426" mass="0.6781"
                       diaginertia="0.00170087 0.001641 0.00035013"/>
+                    <!-- range: 限制范围 ±120度 -->
                     <joint name="joint_6" range="-2.09 2.09"/>
                     <geom class="gen3/visual" mesh="spherical_wrist_2_link"/>
                     <geom class="gen3/collision" mesh="spherical_wrist_2_link"/>
+                    
+                    <!-- === 关节7：腕环旋转 === -->
                     <body name="bracelet_link" pos="0 -0.10593 -0.00017505" quat="1 -1 0 0">
                       <inertial pos="0.000281 0.011402 -0.029798" quat="0.394358 0.596779 -0.577293 0.393789" mass="0.5"
                         diaginertia="0.000657336 0.000587019 0.000320645"/>
-                      <joint name="joint_7"/>
+                      <joint name="joint_7"/>  <!-- 无限制旋转 -->
                       <geom class="gen3/visual" mesh="bracelet_with_vision_link"/>
                       <geom class="gen3/collision" mesh="bracelet_with_vision_link"/>
+                      
+                      <!-- ========== Robotiq 2F-85 夹爪 ========== -->
+                      <!-- 夹爪基座：安装在腕环末端 -->
                       <body name="base" pos="0 0 -0.06149039" quat="0 -1 1 0" childclass="2f85">
                         <inertial mass="0.777441" pos="0 -2.70394e-05 0.0354675" quat="1 -0.00152849 0 0"
                           diaginertia="0.000260285 0.000225381 0.000152708"/>
                         <geom class="2f85/visual" mesh="base" material="2f85/black"/>
                         <geom class="2f85/collision" mesh="base"/>
-                        <!-- <site name="pinch" pos="0 0 0.145" type="sphere" group="5" rgba="0.9 0.9 0.9 1"
-                        size="0.005"/> -->
-                        <!-- Right-hand side 4-bar linkage -->
+                        
+                        <!-- 夹爪捏合点站点（已注释）：用于定义末端执行器中心点 -->
+                        <!-- <site name="pinch" pos="0 0 0.145" type="sphere" group="5" rgba="0.9 0.9 0.9 1" size="0.005"/> -->
+                        
+                        <!-- === 右侧四杆机构 === -->
+                        <!-- 驱动件：由电机直接驱动 -->
                         <body name="right_driver" pos="0 0.0306011 0.054904">
                           <inertial mass="0.00899563" pos="2.96931e-12 0.0177547 0.00107314"
                             quat="0.681301 0.732003 0 0" diaginertia="1.72352e-06 1.60906e-06 3.22006e-07"/>
                           <joint name="right_driver_joint" class="driver"/>
                           <geom class="2f85/visual" mesh="driver" material="2f85/gray"/>
                           <geom class="2f85/collision" mesh="driver"/>
+                          
+                          <!-- 耦合件：连接驱动和从动 -->
                           <body name="right_coupler" pos="0 0.0315 -0.0041">
                             <inertial mass="0.0140974" pos="0 0.00301209 0.0232175"
                               quat="0.705636 -0.0455904 0.0455904 0.705636"
@@ -187,6 +280,8 @@
                             <geom class="2f85/collision" mesh="coupler"/>
                           </body>
                         </body>
+                        
+                        <!-- 弹簧连杆：提供自适应抓取能力 -->
                         <body name="right_spring_link" pos="0 0.0132 0.0609">
                           <inertial mass="0.0221642" pos="-8.65005e-09 0.0181624 0.0212658"
                             quat="0.663403 -0.244737 0.244737 0.663403"
@@ -194,25 +289,34 @@
                           <joint name="right_spring_link_joint" class="spring_link"/>
                           <geom class="2f85/visual" mesh="spring_link" material="2f85/black"/>
                           <geom class="2f85/collision" mesh="spring_link"/>
+                          
+                          <!-- 从动件：随驱动件运动 -->
                           <body name="right_follower" pos="0 0.055 0.0375">
                             <inertial mass="0.0125222" pos="0 -0.011046 0.0124786" quat="1 0.1664 0 0"
                               diaginertia="2.67415e-06 2.4559e-06 6.02031e-07"/>
                             <joint name="right_follower_joint" class="follower"/>
                             <geom class="2f85/visual" mesh="follower" material="2f85/black"/>
                             <geom class="2f85/collision" mesh="follower"/>
+                            
+                            <!-- 接触垫：实际与物体接触的部分 -->
                             <body name="right_pad" pos="0 -0.0189 0.01352">
+                              <!-- 两个接触盒：模拟橡胶垫的柔软性和摩擦力 -->
                               <geom class="pad_box1" name="right_pad1"/>
                               <geom class="pad_box2" name="right_pad2"/>
                               <inertial mass="0.0035" pos="0 -0.0025 0.0185" quat="0.707107 0 0 0.707107"
                                 diaginertia="4.73958e-07 3.64583e-07 1.23958e-07"/>
                               <geom class="2f85/visual" mesh="pad"/>
+                              
+                              <!-- 硅胶垫：视觉表示 -->
                               <body name="right_silicone_pad">
                                 <geom class="2f85/visual" mesh="silicone_pad" material="2f85/black"/>
                               </body>
                             </body>
                           </body>
                         </body>
-                        <!-- Left-hand side 4-bar linkage -->
+                        
+                        <!-- === 左侧四杆机构 === -->
+                        <!-- 结构与右侧镜像对称 -->
                         <body name="left_driver" pos="0 -0.0306011 0.054904" quat="0 0 0 1">
                           <inertial mass="0.00899563" pos="0 0.0177547 0.00107314" quat="0.681301 0.732003 0 0"
                             diaginertia="1.72352e-06 1.60906e-06 3.22006e-07"/>
@@ -254,8 +358,18 @@
                           </body>
                         </body>
                       </body>
+                      
+                      <!-- 腕部相机：安装在夹爪附近，朝前看 -->
+                      <!-- pos: 相机位置 (向前5.6cm, 向下5.8cm)
+                           quat: 朝向正前方
+                           fovy: 垂直视场角 41.84度
+                           resolution: 640×480 像素 (VGA分辨率) -->
                       <camera name="wrist" pos="0 -0.05639 -0.058475" quat="0 0 0 1" fovy="41.83792730009236"
                         resolution="640 480"/>
+                      
+                      <!-- 捏合站点：定义末端执行器的逻辑中心点 -->
+                      <!-- 用于机器人控制和轨迹规划
+                           pos: 在夹爪手指中间，向下18.15cm -->
                       <site name="pinch_site" pos="0 0 -0.181525" quat="0 1 0 0"/>
                     </body>
                   </body>
@@ -268,6 +382,8 @@
     </body>
   </worldbody>
 
+  <!-- ========== 接触排除 ========== -->
+  <!-- 排除相邻或内部组件之间的碰撞检测，避免自碰撞 -->
   <contact>
     <exclude body1="base" body2="left_driver"/>
     <exclude body1="base" body2="right_driver"/>
@@ -277,39 +393,77 @@
     <exclude body1="left_coupler" body2="left_follower"/>
   </contact>
 
+  <!-- ========== 腱（Tendon）定义 ========== -->
+  <!-- 模拟夹爪的机械耦合：左右两个驱动关节同步运动 -->
   <tendon>
+    <!-- 固定腱：将左右驱动关节耦合
+         coef="0.5": 每个关节贡献50%的运动 -->
     <fixed name="split">
       <joint joint="right_driver_joint" coef="0.5"/>
       <joint joint="left_driver_joint" coef="0.5"/>
     </fixed>
   </tendon>
 
+  <!-- ========== 等式约束 ========== -->
+  <!-- 定义夹爪四杆机构的闭环约束 -->
   <equality>
+    <!-- 连接约束：从动件和耦合件在特定点连接
+         solimp/solref: 约束求解器参数 -->
     <connect anchor="0 0 0" body1="right_follower" body2="right_coupler" solimp="0.95 0.99 0.001" solref="0.005 1"/>
     <connect anchor="0 0 0" body1="left_follower" body2="left_coupler" solimp="0.95 0.99 0.001" solref="0.005 1"/>
+    
+    <!-- 关节约束：左右驱动关节保持同步
+         polycoef="0 1 0 0 0": 线性关系（1:1映射） -->
     <joint joint1="right_driver_joint" joint2="left_driver_joint" polycoef="0 1 0 0 0" solimp="0.95 0.99 0.001"
       solref="0.005 1"/>
   </equality>
 
+  <!-- ========== 执行器定义 ========== -->
   <actuator>
+    <!-- === 移动底盘执行器 === -->
+    <!-- 高增益位置控制，模拟刚性连接 -->
     <position name="joint_x" joint="joint_x" kp="1000000" kv="50000"/>
     <position name="joint_y" joint="joint_y" kp="1000000" kv="50000"/>
     <position name="joint_th" joint="joint_th" kp="50000" kv="1000"/>
+    
+    <!-- === 机械臂执行器 === -->
+    <!-- 关节1: 肩部旋转（大执行器） -->
     <position class="large_actuator" name="joint_1" joint="joint_1"/>
+    <!-- 关节2: 肩部俯仰（大执行器，有控制范围限制） -->
     <position class="large_actuator" name="joint_2" joint="joint_2" ctrlrange="-2.2497294058206907 2.2497294058206907"/>
+    <!-- 关节3: 肘部旋转（大执行器） -->
     <position class="large_actuator" name="joint_3" joint="joint_3"/>
+    <!-- 关节4: 前臂旋转（大执行器，有控制范围限制） -->
     <position class="large_actuator" name="joint_4" joint="joint_4" ctrlrange="-2.5795966344476193 2.5795966344476193"/>
+    <!-- 关节5: 腕部旋转1（小执行器） -->
     <position class="small_actuator" name="joint_5" joint="joint_5"/>
+    <!-- 关节6: 腕部旋转2（小执行器，有控制范围限制） -->
     <position class="small_actuator" name="joint_6" joint="joint_6" ctrlrange="-2.0996310901491784 2.0996310901491784"/>
+    <!-- 关节7: 腕环旋转（小执行器） -->
     <position class="small_actuator" name="joint_7" joint="joint_7"/>
+    
+    <!-- === 夹爪执行器 === -->
+    <!-- 通用执行器：控制夹爪开合
+         tendon="split": 作用于split腱（同时驱动左右手指）
+         forcerange: 力范围 ±5 N
+         ctrlrange: 控制信号范围 0-255（模拟实际硬件接口）
+         gainprm/biasprm: 仿射变换参数，将控制信号转换为力 -->
     <general class="2f85" name="fingers_actuator" tendon="split" forcerange="-5 5" ctrlrange="0 255"
       gainprm="0.3137255 0 0" biasprm="0 -100 -10"/>
   </actuator>
 
-  <!-- <keyframe>
+  <!-- ========== 关键帧（已注释） ========== -->
+  <!-- 预定义的机器人姿态，用于快速初始化 -->
+  <!-- 
+  <keyframe>
+    home: 家位姿态（机械臂伸展）
     <key name="home" qpos="0 0 0 0 0.26179939 3.14159265 -2.26892803 0 0.95993109 1.57079633 0 0 0 0 0 0 0 0"
       ctrl="0 0 0 0 0.26179939 3.14159265 -2.26892803 0 0.95993109 1.57079633 0"/>
+    
+    retract: 收缩姿态（机械臂折叠）- 对应 mujoco_env.py 第166行
     <key name="retract" qpos="0 0 0 0 -0.34906585 3.14159265 -2.54818071 0 -0.87266463 1.57079633 0 0 0 0 0 0 0 0"
       ctrl="0 0 0 0 -0.34906585 3.14159265 -2.54818071 0 -0.87266463 1.57079633 0"/>
-  </keyframe> -->
+  </keyframe>
+  -->
 </mujoco>
+

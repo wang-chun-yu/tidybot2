@@ -1,0 +1,11 @@
+<mujoco model="arm">
+  <compiler angle="radian" meshdir="../assets"/>
+
+  <option integrator="implicitfast"/>
+
+  <default>
+    <default class="visual">
+      <geom type="mesh" contype="0" conaffinity="0" group="2"/>
+    </default>
+  </default>
+</mujoco>
