@@ -68,7 +68,7 @@ def run_episode(env, policy, writer=None):
     start_time = time.time()
     
     # 无限循环，直到用户选择重置环境
-    for step_idx in count():
+    for step_idx in count[int]():
         # 强制控制频率为 10 Hz（每 100ms 一步）
         step_end_time = start_time + step_idx * POLICY_CONTROL_PERIOD
         while time.time() < step_end_time:
@@ -150,6 +150,7 @@ def main(args):
         # 无限循环运行 episodes
         while True:
             # 如果需要保存数据，创建 EpisodeWriter
+            print("args.output_dir: ", args.output_dir)
             writer = EpisodeWriter(args.output_dir) if args.save else None
             run_episode(env, policy, writer)
     finally:

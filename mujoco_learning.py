@@ -13,7 +13,7 @@ print(f"执行器数量: {model.nu}")
 # print(f"控制范围: motor1={model.actuator_ctrlrange[0]}, motor2={model.actuator_ctrlrange[1]}")
 
 # PD 控制增益（按关节顺序：joint1, joint2）
-Kp = np.array([20.0, 20.0])
+Kp = np.array([200.0, 20.0])
 Kd = np.array([1.0, 1.0])
 
 # 启动可视化
@@ -50,6 +50,7 @@ with mujoco.viewer.launch_passive(model, data) as viewer:
         
         # 仿真步进
         mujoco.mj_step(model, data)
+        time.sleep(10000)
         
         # 同步可视化（限制帧率）
         viewer.sync()

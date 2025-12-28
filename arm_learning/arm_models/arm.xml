@@ -1,0 +1,59 @@
+<mujoco model="arm">
+  <compiler angle="degree" meshdir="./assets"/>
+
+  <option integrator="implicitfast"/>
+  <option cone="elliptic" impratio="10"/>
+
+  <default>
+    <default class="arm">
+      <default class="arm/visual">
+        <geom type="mesh" contype="0" conaffinity="0" group="2" rgba="0.75294 0.75294 0.75294 1"/>
+      </default>
+      <default class="arm/collision">
+        <geom type="mesh" group="3"/>
+      </default>
+    </default>
+    <site size="0.001" rgba="0.5 0.5 0.5 0.3" group="4"/>
+  </default>
+
+  <asset>
+    <mesh name="arm/base_link" file="base_link.STL"/>
+    <mesh name="arm/link1" file="link1.STL"/>
+    <mesh name="arm/link2" file="link2.STL"/>
+    <mesh name="arm/link3" file="link3.STL"/>
+  </asset>
+
+  <worldbody>
+    <body name="base_link" pos="0 0 0">
+        <geom class="arm/visual" mesh="arm/base_link"/>
+        <geom class="arm/collision" mesh="arm/base_link"/>
+        <!-- link1 -->
+        <body name="link1" pos="0 0 0.067">
+            <joint name="joint1" type="hinge" axis="0 0 1" damping="0.0"/>
+            <geom class="arm/visual" mesh="arm/link1"/>
+            <geom class="arm/collision" mesh="arm/link1"/>
+            <!-- link2 -->
+            <body name="link2" pos="-0.0041 0.0113 0.093" euler="-90 -20 0">
+                <joint name="joint2" type="hinge" axis="0 0 1" damping="0.0"/>
+                <geom class="arm/visual" mesh="arm/link2"/>
+                <geom class="arm/collision" mesh="arm/link2"/>
+                <!-- link3 -->
+                <body name="link3" pos="0.2 0 0.019" euler="0 0 0">
+                    <joint name="joint3" type="hinge" axis="0 0 1" damping="0.0"/>
+                    <geom class="arm/visual" mesh="arm/link3"/>
+                    <geom class="arm/collision" mesh="arm/link3"/>
+                </body>
+            </body>
+        </body>
+    </body>
+  </worldbody>
+
+  <actuator>
+    <!-- <motor name="motor1" joint="joint1" gear="1" ctrlrange="-500 500"/>
+    <motor name="motor2" joint="joint2" gear="1" ctrlrange="-100 100"/>
+    <motor name="motor3" joint="joint3" gear="1" ctrlrange="-100 100"/> -->
+    <motor name="motor1" joint="joint1" gear="1" ctrlrange="-0 0"/>
+    <motor name="motor2" joint="joint2" gear="1" ctrlrange="-0 0"/>
+    <motor name="motor3" joint="joint3" gear="1" ctrlrange="-0 0"/>
+  </actuator>
+</mujoco>
